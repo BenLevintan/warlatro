@@ -1,7 +1,7 @@
 import arcade
 
 # --- Constants ---
-SCREEN_WIDTH = 1280
+SCREEN_WIDTH = 1480
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "Warlatro: Roguelike War (Retro Edition)"
 
@@ -22,6 +22,12 @@ DRAWN_CARD_Y = 480
 # Animation Physics
 STIFFNESS = 0.1  
 DAMPING = 0.75   
+
+# Floating / Breathing Animation
+FLOAT_SPEED = 3.0       
+FLOAT_RANGE = 3.0       
+JOKER_ROT_SPEED = 2.0   
+JOKER_ROT_RANGE = 3.0   
 
 # Game Logic
 MAX_HAND_SIZE = 5
@@ -47,7 +53,7 @@ COLOR_GOLD = (255, 215, 0)
 COLOR_SHADOW = (0, 0, 0, 100)
 COLOR_TOOLTIP_BG = (20, 20, 20, 230) 
 
-# --- Joker Definitions (FIXED PATHS) ---
+# --- Joker Definitions ---
 JOKER_DATA = {
     "pear_up": {
         "name": "Pear-Up", "cost": 4, "desc": "+8 Mult if Pair", 
@@ -68,6 +74,23 @@ JOKER_DATA = {
     "inflation": {
         "name": "Inflation", "cost": 6, "desc": "+12 Mult if Hand <= 4 cards", 
         "file": "assets/jokers/inflation.jpg"
+    },
+    # --- NEW JOKERS ---
+    "diamond_geezer": {
+        "name": "Diamond Geezer", "cost": 7, "desc": "+4 Mult for each Diamond played",
+        "file": "assets/jokers/Diamond_Geezer.jpg"
+    },
+    "waste_management": {
+        "name": "Waste Management", "cost": 6, "desc": "+1 Mult for every 3 cards discarded this run",
+        "file": "assets/jokers/Waste_Management.jpg"
+    },
+    "wishing_well": {
+        "name": "Wishing Well", "cost": 5, "desc": "Gain $1 for each A, 2, or 3 played",
+        "file": "assets/jokers/wishing_well.jpg"
+    },
+    "the_regular": {
+        "name": "The Regular", "cost": 4, "desc": "+4 Mult",
+        "file": "assets/jokers/the_regular.jpg"
     }
 }
 

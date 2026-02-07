@@ -4,7 +4,6 @@ import random
 import enum
 from collections import Counter
 
-# Import our modules
 import config
 import sprites
 import ui_elements
@@ -35,7 +34,8 @@ class WarGame(arcade.Window):
         self.discards_left = config.MAX_DISCARDS
         self.target_score = config.BASE_TARGET_SCORE
         self.round_level = 1
-        self.coins = 5 
+        self.coins = 5
+        self.run_discards = 0 # Track total discards for Waste Management
         
         self.message = ""
         self.hand_details = [] 
@@ -72,6 +72,8 @@ class WarGame(arcade.Window):
         self.shop_list = arcade.SpriteList()
         self.drawn_card = None
         
+        # Reset run stats on setup
+        self.run_discards = 0
         self.start_new_round()
 
     def start_new_round(self):
@@ -111,10 +113,17 @@ class WarGame(arcade.Window):
     def draw_new_card(self):
         if len(self.deck) > 0:
             card = self.deck.pop()
-            card.center_x = config.SCREEN_WIDTH + 150
-            card.center_y = config.DRAWN_CARD_Y
+            
+            # ANIMATION INIT
+            start_x = config.SCREEN_WIDTH + 150
+            start_y = config.DRAWN_CARD_Y
+            card._phys_x = start_x
+            card._phys_y = start_y
+            card.center_x = start_x
+            card.center_y = start_y
             card.target_x = config.DRAWN_CARD_X
             card.target_y = config.DRAWN_CARD_Y
+            
             self.drawn_card = card
             self.card_list.append(card)
             self.state = GameState.DECIDING
@@ -141,11 +150,17 @@ class WarGame(arcade.Window):
         start_x = config.SCREEN_WIDTH / 2 - 150
         for i, key in enumerate(choices):
             joker = sprites.Joker(key, config.JOKER_SCALE)
-            joker.center_x = start_x + (i * 300)
-            joker.center_y = config.SCREEN_HEIGHT / 2 + 100 
+            
+            tx = start_x + (i * 300)
+            ty = config.SCREEN_HEIGHT / 2 + 100
+            joker._phys_x = tx
+            joker._phys_y = ty
+            joker.target_x = tx
+            joker.target_y = ty
+            
             self.shop_list.append(joker)
             
-            btn = ui_elements.TextButton(joker.center_x, joker.center_y - 170, 120, 40, f"BUY ${joker.cost}", config.COLOR_BTN_SHOP)
+            btn = ui_elements.TextButton(tx, ty - 170, 120, 40, f"BUY ${joker.cost}", config.COLOR_BTN_SHOP)
             if self.coins < joker.cost:
                 btn.active = False
                 btn.text = f"  Need ${joker.cost}"
@@ -190,18 +205,21 @@ class WarGame(arcade.Window):
     def reposition_jokers(self):
         start_x = config.SCREEN_WIDTH - 100
         for i, joker in enumerate(self.joker_list):
-            joker.center_x = start_x - (i * (config.JOKER_WIDTH + 50))
-            joker.center_y = config.SCREEN_HEIGHT - 250
+            tx = start_x - (i * (config.JOKER_WIDTH + 50))
+            ty = config.SCREEN_HEIGHT - 250
+            joker.target_x = tx
+            joker.target_y = ty
             joker.scale = 0.25
 
     # --- SCORING LOGIC ---
     def calculate_score(self):
-        if not self.hand_list: return 0, 1, []
+        if not self.hand_list: return 0, 1, [], 0
 
         base_sum = sum(c.value for c in self.hand_list)
         
         additive_mult = 1
         final_multiplier = 1
+        coin_bonus = 0 # New variable for Wishing Well
         
         bonus_points = 0
         breakdown = []
@@ -253,19 +271,51 @@ class WarGame(arcade.Window):
         if {14, 2, 3}.issubset(set(unique_ranks)):
             has_3_straight = True
 
+        # --- JOKER LOGIC ---
         for joker in self.joker_list:
+            # 1. Pear Up
             if joker.key == "pear_up" and (has_pair or has_trip): 
                 additive_mult += 8
                 breakdown.append("PearUp(+8)")
             
+            # 2. Triple Treat
             if joker.key == "triple_treat" and has_trip:
                 additive_mult += 12
                 breakdown.append("TripTreat(+12)")
                 
+            # 3. Inflation
             if joker.key == "inflation" and len(self.hand_list) <= 4:
                 additive_mult += 12
                 breakdown.append("Inflation(+12)")
-        
+            
+            # 4. The Regular (NEW)
+            if joker.key == "the_regular":
+                additive_mult += 4
+                breakdown.append("Regular(+4)")
+
+            # 5. Waste Management (NEW)
+            if joker.key == "waste_management":
+                wm_bonus = self.run_discards // 3
+                if wm_bonus > 0:
+                    additive_mult += wm_bonus
+                    breakdown.append(f"WasteMan(+{wm_bonus})")
+
+            # 6. Diamond Geezer (NEW)
+            if joker.key == "diamond_geezer":
+                diamond_count = sum(1 for c in self.hand_list if c.suit == 'Diamonds')
+                if diamond_count > 0:
+                    dg_bonus = diamond_count * 4
+                    additive_mult += dg_bonus
+                    breakdown.append(f"Geezer(+{dg_bonus})")
+
+            # 7. Wishing Well (NEW) (Economy)
+            if joker.key == "wishing_well":
+                wish_hits = sum(1 for c in self.hand_list if c.value in [14, 2, 3]) # A, 2, 3
+                if wish_hits > 0:
+                    coin_bonus += wish_hits
+                    breakdown.append(f"Wish(+${wish_hits})")
+
+        # Multiplicative jokers last
         for joker in self.joker_list:
             if joker.key == "multi_python" and has_3_straight:
                 final_multiplier *= 2
@@ -274,11 +324,13 @@ class WarGame(arcade.Window):
         total_mult = additive_mult * final_multiplier
         total_base = base_sum + bonus_points
         
-        return total_base, total_mult, breakdown
+        return total_base, total_mult, breakdown, coin_bonus
     
     def on_update(self, delta_time):
         self.shader_time += delta_time
         self.card_list.update()
+        self.joker_list.update()
+        self.shop_list.update()
 
     def draw_game_contents(self):
         # 1. Backgrounds
@@ -398,9 +450,11 @@ class WarGame(arcade.Window):
                 self.btn_action.active = True
 
         if len(self.hand_list) > 0:
-            s, m, desc = self.calculate_score()
+            s, m, desc, coin_bonus = self.calculate_score()
             total = s * m
             self.btn_score.text = f"PLAY HAND\n{s} x {m} = {total}"
+            if coin_bonus > 0:
+                self.btn_score.text += f"\n(+${coin_bonus})"
             self.hand_details = desc
             self.btn_score.active = True
         else:
@@ -486,6 +540,9 @@ class WarGame(arcade.Window):
                 self.discards_left -= 1
             else:
                 return 
+        
+        # Increment run discards for Waste Management Joker
+        self.run_discards += len(to_remove)
 
         for card in to_remove:
             self.hand_list.remove(card) 
@@ -499,9 +556,13 @@ class WarGame(arcade.Window):
             self.draw_new_card()
 
     def score_hand(self):
-        base, multi, _ = self.calculate_score()
+        base, multi, _, coin_bonus = self.calculate_score()
         final_score = base * multi
         self.score_total += final_score
+        
+        # Apply coin bonuses from Wishing Well
+        if coin_bonus > 0:
+            self.coins += coin_bonus
         
         for card in list(self.hand_list): 
             self.hand_list.remove(card)
@@ -519,9 +580,10 @@ class WarGame(arcade.Window):
             self.state = GameState.GAME_OVER
         else:
             self.message = f"Scored {final_score}! ({base} x {multi})"
+            if coin_bonus > 0:
+                self.message += f" Earned ${coin_bonus}!"
 
     def reposition_hand(self):
-        # NEW LOGIC: Sort hand by value (and suit for stability) before placing
         self.hand_list.sort(key=lambda c: (c.value, c.suit))
         
         start_x = (config.SCREEN_WIDTH - (len(self.hand_list) * (config.CARD_WIDTH + 20))) / 2 + config.CARD_WIDTH / 2
