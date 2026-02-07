@@ -1,4 +1,3 @@
-# config.py
 import arcade
 
 # --- Constants ---
@@ -48,27 +47,27 @@ COLOR_GOLD = (255, 215, 0)
 COLOR_SHADOW = (0, 0, 0, 100)
 COLOR_TOOLTIP_BG = (20, 20, 20, 230) 
 
-# --- Joker Definitions ---
+# --- Joker Definitions (FIXED PATHS) ---
 JOKER_DATA = {
     "pear_up": {
         "name": "Pear-Up", "cost": 4, "desc": "+8 Mult if Pair", 
-        "file": ":resources:images/items/gold_1.png"
+        "file": "assets/jokers/pear_up.jpg"
     },
     "helping_hand": {
         "name": "Helping Hand", "cost": 5, "desc": "+1 Hand per Round", 
-        "file": ":resources:images/items/gemBlue.png"
+        "file": "assets/jokers/helping_hand.jpg"
     },
     "triple_treat": {
         "name": "Triple Treat", "cost": 4, "desc": "+12 Mult if 3-of-a-Kind", 
-        "file": ":resources:images/items/gemRed.png"
+        "file": "assets/jokers/triple_treat.jpg"
     },
     "multi_python": {
         "name": "Multi Python", "cost": 7, "desc": "x2 Mult if 3-card Straight", 
-        "file": ":resources:images/items/gemGreen.png"
+        "file": "assets/jokers/multi_python.jpg"
     },
     "inflation": {
         "name": "Inflation", "cost": 6, "desc": "+12 Mult if Hand <= 4 cards", 
-        "file": ":resources:images/items/gemYellow.png"
+        "file": "assets/jokers/inflation.jpg"
     }
 }
 

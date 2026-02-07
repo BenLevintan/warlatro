@@ -1,11 +1,10 @@
-# main.py
 import arcade
 import arcade.gl
 import random
 import enum
 from collections import Counter
 
-# Import our new modules
+# Import our modules
 import config
 import sprites
 import ui_elements
@@ -263,7 +262,7 @@ class WarGame(arcade.Window):
                 additive_mult += 12
                 breakdown.append("TripTreat(+12)")
                 
-            if joker.key == "inflation" and len(self.hand_list) <= config.MAX_HAND_SIZE - 1: # 4 cards
+            if joker.key == "inflation" and len(self.hand_list) <= 4:
                 additive_mult += 12
                 breakdown.append("Inflation(+12)")
         
@@ -522,6 +521,9 @@ class WarGame(arcade.Window):
             self.message = f"Scored {final_score}! ({base} x {multi})"
 
     def reposition_hand(self):
+        # NEW LOGIC: Sort hand by value (and suit for stability) before placing
+        self.hand_list.sort(key=lambda c: (c.value, c.suit))
+        
         start_x = (config.SCREEN_WIDTH - (len(self.hand_list) * (config.CARD_WIDTH + 20))) / 2 + config.CARD_WIDTH / 2
         for i, card in enumerate(self.hand_list):
             card.target_x = start_x + i * (config.CARD_WIDTH + 20)
