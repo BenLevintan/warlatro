@@ -1,7 +1,18 @@
 import arcade
+import sys
+import os
+
+# --- PATH HELPER FUNCTION (REQUIRED FOR EXE) ---
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # --- Constants ---
-SCREEN_WIDTH = 1480
+SCREEN_WIDTH = 1480  # UPDATED
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "Warlatro: Roguelike War (Retro Edition)"
 
@@ -50,6 +61,8 @@ COLOR_WHITE = (255, 255, 255)
 COLOR_BLACK = (0, 0, 0)
 COLOR_GREEN = (0, 100, 0)
 COLOR_GOLD = (255, 215, 0)
+COLOR_BLUE = (0, 0, 255)
+COLOR_PURPLE = (128, 0, 128)
 COLOR_SHADOW = (0, 0, 0, 100)
 COLOR_TOOLTIP_BG = (20, 20, 20, 230) 
 
@@ -57,42 +70,52 @@ COLOR_TOOLTIP_BG = (20, 20, 20, 230)
 JOKER_DATA = {
     "pear_up": {
         "name": "Pear-Up", "cost": 4, "desc": "+8 Mult if Pair", 
-        "file": "assets/jokers/pear_up.jpg"
+        "file": resource_path("assets/jokers/pear_up.jpg")
     },
     "helping_hand": {
         "name": "Helping Hand", "cost": 5, "desc": "+1 Hand per Round", 
-        "file": "assets/jokers/helping_hand.jpg"
+        "file": resource_path("assets/jokers/helping_hand.jpg")
     },
     "triple_treat": {
         "name": "Triple Treat", "cost": 4, "desc": "+12 Mult if 3-of-a-Kind", 
-        "file": "assets/jokers/triple_treat.jpg"
+        "file": resource_path("assets/jokers/triple_treat.jpg")
     },
     "multi_python": {
         "name": "Multi Python", "cost": 7, "desc": "x2 Mult if 3-card Straight", 
-        "file": "assets/jokers/multi_python.jpg"
+        "file": resource_path("assets/jokers/multi_python.jpg")
     },
     "inflation": {
         "name": "Inflation", "cost": 6, "desc": "+12 Mult if Hand <= 4 cards", 
-        "file": "assets/jokers/inflation.jpg"
+        "file": resource_path("assets/jokers/inflation.jpg")
     },
-    # --- NEW JOKERS ---
     "diamond_geezer": {
         "name": "Diamond Geezer", "cost": 7, "desc": "+4 Mult for each Diamond played",
-        "file": "assets/jokers/Diamond_Geezer.jpg"
+        "file": resource_path("assets/jokers/Diamond_Geezer.jpg")
     },
     "waste_management": {
         "name": "Waste Management", "cost": 6, "desc": "+1 Mult for every 3 cards discarded this run",
-        "file": "assets/jokers/Waste_Management.jpg"
+        "file": resource_path("assets/jokers/Waste_Management.jpg")
     },
     "wishing_well": {
         "name": "Wishing Well", "cost": 5, "desc": "Gain $1 for each A, 2, or 3 played",
-        "file": "assets/jokers/wishing_well.jpg"
+        "file": resource_path("assets/jokers/wishing_well.jpg")
     },
     "the_regular": {
         "name": "The Regular", "cost": 4, "desc": "+4 Mult",
-        "file": "assets/jokers/the_regular.jpg"
+        "file": resource_path("assets/jokers/the_regular.jpg")
     }
 }
+
+# --- Card Modifiers ---
+MODIFIER_DATA = {
+    "bonus_chips": {"name": "Bonus Card", "desc": "+10 Chips", "color": COLOR_BLUE},
+    "mult_plus": {"name": "Mult Card", "desc": "+4 Mult", "color": COLOR_RED},
+    "destroy": {"name": "Destroy", "desc": "Remove from Deck", "color": COLOR_BLACK}
+}
+
+# --- Pack Definitions ---
+PACK_COST = 6
+PACK_FILE = ":resources:images/items/gemRed.png" 
 
 # --- Shaders ---
 VERTEX_SHADER = """

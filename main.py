@@ -12,7 +12,8 @@ class GameState(enum.Enum):
     DRAWING = 1
     DECIDING = 2
     SHOPPING = 3
-    GAME_OVER = 4
+    PACK_OPENING = 4 
+    GAME_OVER = 5
 
 class WarGame(arcade.Window):
     def __init__(self):
@@ -23,19 +24,25 @@ class WarGame(arcade.Window):
         self.hand_list = None
         self.joker_list = None
         self.shop_list = None
+        self.pack_card_list = None 
         self.drawn_card = None
         
         # Game State
         self.state = GameState.DRAWING
-        self.deck = []
+        
+        # Deck Persistence
+        self.master_deck = []   
+        self.draw_pile = []     
+        self.discard_pile = []  
+        
         self.score_total = 0
         self.hands_played = 0
         self.hands_max = config.BASE_HANDS_TO_PLAY
         self.discards_left = config.MAX_DISCARDS
         self.target_score = config.BASE_TARGET_SCORE
         self.round_level = 1
-        self.coins = 5
-        self.run_discards = 0 # Track total discards for Waste Management
+        self.coins = 5 
+        self.run_discards = 0 
         
         self.message = ""
         self.hand_details = [] 
@@ -47,6 +54,11 @@ class WarGame(arcade.Window):
         self.btn_sell = None
         self.shop_buttons = []
         
+        # Pack Buttons
+        self.btn_pack_skip = None
+        self.btn_pack_mods = [] 
+        self.pack_modifiers_offered = [] 
+        
         self.hovered_joker = None 
         self.mouse_x = 0
         self.mouse_y = 0
@@ -55,13 +67,8 @@ class WarGame(arcade.Window):
 
         # --- SHADER SETUP ---
         self.shader_time = 0.0 
-        
-        self.program = self.ctx.program(
-            vertex_shader=config.VERTEX_SHADER,
-            fragment_shader=config.FRAGMENT_SHADER,
-        )
+        self.program = self.ctx.program(vertex_shader=config.VERTEX_SHADER, fragment_shader=config.FRAGMENT_SHADER)
         self.quad_fs = arcade.gl.geometry.quad_2d_fs()
-        
         self.screen_texture = self.ctx.texture((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
         self.fbo = self.ctx.framebuffer(color_attachments=[self.screen_texture])
 
@@ -70,11 +77,22 @@ class WarGame(arcade.Window):
         self.hand_list = arcade.SpriteList()
         self.joker_list = arcade.SpriteList()
         self.shop_list = arcade.SpriteList()
+        self.pack_card_list = arcade.SpriteList()
         self.drawn_card = None
         
-        # Reset run stats on setup
+        self.master_deck = []
+        self.create_initial_deck()
         self.run_discards = 0
+        
         self.start_new_round()
+
+    def create_initial_deck(self):
+        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+        ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
+        for suit in suits:
+            for rank in ranks:
+                card = sprites.Card(suit, rank, config.CARD_SCALE)
+                self.master_deck.append(card)
 
     def start_new_round(self):
         self.state = GameState.DRAWING
@@ -82,39 +100,49 @@ class WarGame(arcade.Window):
         self.hand_list.clear()
         self.shop_list.clear()
         self.shop_buttons = []
+        self.pack_card_list.clear()
         
         bonus_hands = sum(1 for j in self.joker_list if j.key == "helping_hand")
         self.hands_max = config.BASE_HANDS_TO_PLAY + bonus_hands
-        
         self.hands_played = 0
         self.score_total = 0
         self.discards_left = config.MAX_DISCARDS
-        self.message = f"Level {self.round_level} Start!"
+        self.message = "" 
         self.hand_details = []
         
+        # Prepare Deck: Reshuffle everything not destroyed
+        self.draw_pile = [c for c in self.master_deck if c.modifier != "destroy"]
+        self.discard_pile = []
+        random.shuffle(self.draw_pile)
+        
+        # Reset cards
+        for card in self.draw_pile:
+            card.should_despawn = False # Safety Reset
+            self.card_list.append(card)
+            card.center_x = config.SCREEN_WIDTH + 200
+            card.center_y = config.DRAWN_CARD_Y
+            card.target_x = config.SCREEN_WIDTH + 200
+            card.target_y = config.DRAWN_CARD_Y
+            card.visible = False 
+
         self.btn_action = ui_elements.TextButton(config.SCREEN_WIDTH/2, 280, 240, 50, "TAKE CARD", config.COLOR_BTN_ACTION)
         self.btn_score = ui_elements.TextButton(config.SCREEN_WIDTH - 150, 150, 200, 60, "SCORE HAND", config.COLOR_BTN_SCORE)
         self.btn_sell = ui_elements.TextButton(0, 0, 100, 40, "SELL", config.COLOR_BTN_SELL) 
         self.btn_sell.visible = False
         
-        self.create_deck()
         self.draw_new_card()
 
-    def create_deck(self):
-        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-        self.deck = []
-        for suit in suits:
-            for rank in ranks:
-                card = sprites.Card(suit, rank, config.CARD_SCALE)
-                self.deck.append(card)
-        random.shuffle(self.deck)
-
     def draw_new_card(self):
-        if len(self.deck) > 0:
-            card = self.deck.pop()
+        # 1. Check if deck is empty, if so, recycle discards
+        if len(self.draw_pile) == 0 and len(self.discard_pile) > 0:
+            self.recycle_discards()
+
+        # 2. Draw card if available
+        if len(self.draw_pile) > 0:
+            card = self.draw_pile.pop()
+            card.visible = True
+            card.should_despawn = False # CRITICAL: Ensure card doesn't insta-die
             
-            # ANIMATION INIT
             start_x = config.SCREEN_WIDTH + 150
             start_y = config.DRAWN_CARD_Y
             card._phys_x = start_x
@@ -125,91 +153,159 @@ class WarGame(arcade.Window):
             card.target_y = config.DRAWN_CARD_Y
             
             self.drawn_card = card
-            self.card_list.append(card)
             self.state = GameState.DECIDING
         else:
-            self.message = "Deck empty!"
+            self.message = "DECK EMPTY!"
+
+    def recycle_discards(self):
+        """ Shuffles discard pile back into draw pile """
+        self.draw_pile = self.discard_pile[:]
+        self.discard_pile = []
+        random.shuffle(self.draw_pile)
+        
+        for card in self.draw_pile:
+            card.should_despawn = False # CRITICAL FIX: Revive card physics
+            if card not in self.card_list:
+                self.card_list.append(card)
+            card.center_x = config.SCREEN_WIDTH + 200
+            card.visible = False
 
     # --- SHOP SYSTEM ---
     def enter_shop(self):
         self.state = GameState.SHOPPING
-        self.message = "SHOP PHASE\nBuy Jokers to help you!"
+        self.message = "SHOP PHASE"
         
         hands_left = max(0, self.hands_max - self.hands_played)
         reward = (hands_left * 2) + (self.discards_left * 1)
         self.coins += reward
-        self.message = f"Round Cleared!\nEarned ${reward} for unused resources."
+        self.message = f"Round Cleared!\nEarned ${reward}."
 
         self.shop_list.clear()
         self.shop_buttons = []
         
-        owned_keys = [j.key for j in self.joker_list]
-        available_keys = [k for k in config.JOKER_DATA.keys() if k not in owned_keys]
-        choices = random.sample(available_keys, min(2, len(available_keys)))
+        slots = ['Pack', 'Joker']
+        slots.append(random.choice(['Pack', 'Joker']))
         
-        start_x = config.SCREEN_WIDTH / 2 - 150
-        for i, key in enumerate(choices):
-            joker = sprites.Joker(key, config.JOKER_SCALE)
+        owned_keys = [j.key for j in self.joker_list]
+        available_jokers = [k for k in config.JOKER_DATA.keys() if k not in owned_keys]
+        
+        start_x = config.SCREEN_WIDTH / 2 - 200
+        for i, item_type in enumerate(slots):
+            pos_x = start_x + (i * 200)
+            pos_y = config.SCREEN_HEIGHT / 2 + 100
             
-            tx = start_x + (i * 300)
-            ty = config.SCREEN_HEIGHT / 2 + 100
-            joker._phys_x = tx
-            joker._phys_y = ty
-            joker.target_x = tx
-            joker.target_y = ty
-            
-            self.shop_list.append(joker)
-            
-            btn = ui_elements.TextButton(tx, ty - 170, 120, 40, f"BUY ${joker.cost}", config.COLOR_BTN_SHOP)
-            if self.coins < joker.cost:
-                btn.active = False
-                btn.text = f"  Need ${joker.cost}"
-            self.shop_buttons.append(btn)
+            if item_type == 'Pack':
+                item = sprites.Pack(config.JOKER_SCALE)
+                item.center_x = pos_x
+                item.center_y = pos_y
+                self.shop_list.append(item)
+                
+                btn = ui_elements.TextButton(pos_x, pos_y - 170, 120, 40, f"BUY ${config.PACK_COST}", config.COLOR_PURPLE)
+                self.shop_buttons.append(btn)
+                
+            elif item_type == 'Joker' and available_jokers:
+                key = random.choice(available_jokers)
+                available_jokers.remove(key) 
+                
+                item = sprites.Joker(key, config.JOKER_SCALE)
+                item._phys_x = pos_x
+                item._phys_y = pos_y
+                item.target_x = pos_x
+                item.target_y = pos_y
+                self.shop_list.append(item)
+                
+                btn = ui_elements.TextButton(pos_x, pos_y - 170, 120, 40, f"BUY ${item.cost}", config.COLOR_BTN_SHOP)
+                self.shop_buttons.append(btn)
 
         self.btn_next_round = ui_elements.TextButton(config.SCREEN_WIDTH - 150, 80, 200, 60, "NEXT LEVEL >", config.COLOR_GREEN)
+        self.update_shop_buttons()
 
-    def buy_joker(self, index):
-        if index >= len(self.shop_list): return
-        
-        target_joker = self.shop_list[index]
-        if self.coins >= target_joker.cost:
-            if len(self.joker_list) < config.MAX_JOKERS:
-                self.coins -= target_joker.cost
-                target_joker.remove_from_sprite_lists()
-                self.joker_list.append(target_joker)
-                self.reposition_jokers()
-                self.shop_buttons.pop(index)
-                self.enter_shop_refresh()
-            else:
-                self.message = "Inventory Full! (Max 3)"
-
-    def enter_shop_refresh(self):
-        for i, joker in enumerate(self.shop_list):
+    def update_shop_buttons(self):
+        for i, item in enumerate(self.shop_list):
             if i < len(self.shop_buttons):
                 btn = self.shop_buttons[i]
-                if self.coins < joker.cost:
+                if self.coins < item.cost:
                     btn.active = False
-                    btn.text = f"Need ${joker.cost}"
+                    btn.text = f"Need ${item.cost}"
                 else:
                     btn.active = True
-                    btn.text = f"BUY ${joker.cost}"
+                    btn.text = f"BUY ${item.cost}"
 
-    def sell_joker(self):
-        to_sell = [j for j in self.joker_list if j.is_selected]
-        for joker in to_sell:
-            self.coins += joker.sell_price
-            joker.remove_from_sprite_lists()
-        self.reposition_jokers()
-        self.btn_sell.visible = False
+    def buy_shop_item(self, index):
+        if index >= len(self.shop_list): return
+        item = self.shop_list[index]
+        
+        if self.coins >= item.cost:
+            if isinstance(item, sprites.Joker):
+                if len(self.joker_list) < config.MAX_JOKERS:
+                    self.coins -= item.cost
+                    item.remove_from_sprite_lists()
+                    self.joker_list.append(item)
+                    self.reposition_jokers() 
+                    self.shop_buttons.pop(index)
+                    self.update_shop_buttons()
+                else:
+                    self.message = "Inventory Full!"
+            
+            elif isinstance(item, sprites.Pack):
+                self.coins -= item.cost
+                item.remove_from_sprite_lists() 
+                self.shop_buttons.pop(index)
+                self.start_pack_opening()
 
-    def reposition_jokers(self):
-        start_x = config.SCREEN_WIDTH - 100
-        for i, joker in enumerate(self.joker_list):
-            tx = start_x - (i * (config.JOKER_WIDTH + 50))
-            ty = config.SCREEN_HEIGHT - 250
-            joker.target_x = tx
-            joker.target_y = ty
-            joker.scale = 0.25
+    # --- PACK OPENING LOGIC ---
+    def start_pack_opening(self):
+        self.state = GameState.PACK_OPENING
+        self.message = "Select Cards then Choose Modifier"
+        self.pack_card_list.clear()
+        self.btn_pack_mods = []
+        
+        available = [c for c in self.master_deck if c.modifier != "destroy"]
+        num_to_draw = min(8, len(available))
+        chosen_cards = random.sample(available, num_to_draw)
+        
+        start_x = config.SCREEN_WIDTH / 2 - 250
+        start_y = config.SCREEN_HEIGHT / 2 + 100
+        for i, card in enumerate(chosen_cards):
+            self.pack_card_list.append(card)
+            card.visible = True
+            card.is_selected = False
+            
+            row = i // 4
+            col = i % 4
+            tx = start_x + (col * (config.CARD_WIDTH + 20))
+            ty = start_y - (row * (config.CARD_HEIGHT + 20))
+            
+            card._phys_x = config.SCREEN_WIDTH + 100 
+            card._phys_y = ty
+            card.target_x = tx
+            card.target_y = ty
+
+        keys = list(config.MODIFIER_DATA.keys())
+        self.pack_modifiers_offered = random.sample(keys, 2)
+        
+        bx = config.SCREEN_WIDTH / 2 - 100
+        by = 150
+        for i, mod_key in enumerate(self.pack_modifiers_offered):
+            data = config.MODIFIER_DATA[mod_key]
+            btn = ui_elements.TextButton(bx + (i * 200), by, 180, 60, data['name'], data['color'])
+            self.btn_pack_mods.append(btn)
+            
+        self.btn_pack_skip = ui_elements.TextButton(config.SCREEN_WIDTH - 100, 50, 100, 40, "SKIP", config.COLOR_BTN_DEFAULT)
+
+    def apply_pack_modifier(self, mod_index):
+        selected = [c for c in self.pack_card_list if c.is_selected]
+        if not selected:
+            self.message = "Select cards first!"
+            return
+            
+        mod_key = self.pack_modifiers_offered[mod_index]
+        for card in selected:
+            card.modifier = mod_key
+            
+        self.state = GameState.SHOPPING
+        self.pack_card_list.clear() 
+        self.message = "Applied!"
 
     # --- SCORING LOGIC ---
     def calculate_score(self):
@@ -219,8 +315,7 @@ class WarGame(arcade.Window):
         
         additive_mult = 1
         final_multiplier = 1
-        coin_bonus = 0 # New variable for Wishing Well
-        
+        coin_bonus = 0 
         bonus_points = 0
         breakdown = []
 
@@ -259,63 +354,51 @@ class WarGame(arcade.Window):
         unique_ranks = sorted(list(set(sorted_ranks)))
         has_3_straight = False
         consecutive = 0
-        
         for i in range(len(unique_ranks) - 1):
             if unique_ranks[i+1] == unique_ranks[i] + 1:
                 consecutive += 1
-                if consecutive >= 2: 
-                    has_3_straight = True
-            else:
-                consecutive = 0
-        
-        if {14, 2, 3}.issubset(set(unique_ranks)):
-            has_3_straight = True
+                if consecutive >= 2: has_3_straight = True
+            else: consecutive = 0
+        if {14, 2, 3}.issubset(set(unique_ranks)): has_3_straight = True
 
-        # --- JOKER LOGIC ---
+        for card in self.hand_list:
+            if card.modifier == "bonus_chips":
+                bonus_points += 10
+                breakdown.append("Bonus(+10)")
+            elif card.modifier == "mult_plus":
+                additive_mult += 4
+                breakdown.append("Mult(+4)")
+
         for joker in self.joker_list:
-            # 1. Pear Up
             if joker.key == "pear_up" and (has_pair or has_trip): 
                 additive_mult += 8
                 breakdown.append("PearUp(+8)")
-            
-            # 2. Triple Treat
             if joker.key == "triple_treat" and has_trip:
                 additive_mult += 12
                 breakdown.append("TripTreat(+12)")
-                
-            # 3. Inflation
             if joker.key == "inflation" and len(self.hand_list) <= 4:
                 additive_mult += 12
                 breakdown.append("Inflation(+12)")
-            
-            # 4. The Regular (NEW)
             if joker.key == "the_regular":
                 additive_mult += 4
                 breakdown.append("Regular(+4)")
-
-            # 5. Waste Management (NEW)
             if joker.key == "waste_management":
                 wm_bonus = self.run_discards // 3
                 if wm_bonus > 0:
                     additive_mult += wm_bonus
                     breakdown.append(f"WasteMan(+{wm_bonus})")
-
-            # 6. Diamond Geezer (NEW)
             if joker.key == "diamond_geezer":
                 diamond_count = sum(1 for c in self.hand_list if c.suit == 'Diamonds')
                 if diamond_count > 0:
                     dg_bonus = diamond_count * 4
                     additive_mult += dg_bonus
                     breakdown.append(f"Geezer(+{dg_bonus})")
-
-            # 7. Wishing Well (NEW) (Economy)
             if joker.key == "wishing_well":
-                wish_hits = sum(1 for c in self.hand_list if c.value in [14, 2, 3]) # A, 2, 3
+                wish_hits = sum(1 for c in self.hand_list if c.value in [14, 2, 3]) 
                 if wish_hits > 0:
                     coin_bonus += wish_hits
                     breakdown.append(f"Wish(+${wish_hits})")
-
-        # Multiplicative jokers last
+        
         for joker in self.joker_list:
             if joker.key == "multi_python" and has_3_straight:
                 final_multiplier *= 2
@@ -323,7 +406,6 @@ class WarGame(arcade.Window):
 
         total_mult = additive_mult * final_multiplier
         total_base = base_sum + bonus_points
-        
         return total_base, total_mult, breakdown, coin_bonus
     
     def on_update(self, delta_time):
@@ -331,6 +413,12 @@ class WarGame(arcade.Window):
         self.card_list.update()
         self.joker_list.update()
         self.shop_list.update()
+        if self.state == GameState.PACK_OPENING:
+            self.pack_card_list.update()
+        
+        # Fix for invisible hand cards
+        for card in self.hand_list:
+            card.visible = True
 
     def draw_game_contents(self):
         # 1. Backgrounds
@@ -349,17 +437,42 @@ class WarGame(arcade.Window):
         # 3. Game Area
         if self.state == GameState.SHOPPING:
             arcade.draw_text(self.message, config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT - 150, config.COLOR_WHITE, 20, anchor_x="center", align="center")
-            
             ui_elements.draw_shadows(self.shop_list)
             self.shop_list.draw()
-            
-            for btn in self.shop_buttons:
-                btn.draw()
+            for btn in self.shop_buttons: btn.draw()
             if self.btn_next_round: self.btn_next_round.draw()
 
+        elif self.state == GameState.PACK_OPENING:
+            arcade.draw_text(self.message, config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT - 80, config.COLOR_WHITE, 20, anchor_x="center")
+            ui_elements.draw_shadows(self.pack_card_list)
+            self.pack_card_list.draw()
+            for card in self.pack_card_list:
+                card.draw_modifier()
+                if card.is_selected:
+                    arcade.draw_rect_outline(arcade.XYWH(card.center_x, card.center_y, config.CARD_WIDTH+10, config.CARD_HEIGHT+10), config.COLOR_GREEN, 4)
+            for btn in self.btn_pack_mods: btn.draw()
+            self.btn_pack_skip.draw()
+
+        elif self.state == GameState.GAME_OVER:
+            overlay = arcade.XYWH(config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2, 500, 300)
+            arcade.draw_rect_filled(overlay, config.COLOR_BLACK)
+            arcade.draw_rect_outline(overlay, config.COLOR_WHITE, 4)
+            arcade.draw_text("GAME OVER", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 + 50, config.COLOR_RED, 40, anchor_x="center", bold=True)
+            arcade.draw_text(f"Final Score: {self.score_total}", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2, config.COLOR_WHITE, 20, anchor_x="center")
+            arcade.draw_text("Click to Restart", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 - 60, (150, 150, 150), 16, anchor_x="center")
+
         else: # Playing
-            arcade.draw_text(self.message, config.SCREEN_WIDTH/2, 380, config.COLOR_WHITE, 16, anchor_x="center", align="center")
+            # Deck Counter
+            if self.message:
+                arcade.draw_text(self.message, config.SCREEN_WIDTH/2, 380, config.COLOR_WHITE, 16, anchor_x="center", align="center")
             
+            # --- Deck Count Logic ---
+            current_deck_count = len(self.draw_pile) + len(self.discard_pile) # Corrected logic for full run cycle
+            # Or just count draw pile? Usually in roguelikes you see remaining draw.
+            # User asked for x/52.
+            total_deck_size = len([c for c in self.master_deck if c.modifier != "destroy"])
+            arcade.draw_text(f"Deck: {len(self.draw_pile)} / {total_deck_size}", config.DRAWN_CARD_X, config.DRAWN_CARD_Y - 130, config.COLOR_WHITE, 12, anchor_x="center", bold=True)
+
             start_y = 200
             for i, line in enumerate(self.hand_details):
                 arcade.draw_text(line, config.SCREEN_WIDTH - 150, start_y + (i * 20), config.COLOR_GOLD, 14, anchor_x="center", bold=True)
@@ -378,6 +491,9 @@ class WarGame(arcade.Window):
             ui_elements.draw_shadows(self.card_list)
             self.card_list.draw()
             
+            for card in self.card_list:
+                card.draw_modifier()
+
             for card in self.hand_list:
                 if card.is_selected:
                     h_rect = arcade.XYWH(card.center_x, card.center_y, config.CARD_WIDTH + 12, config.CARD_HEIGHT + 12)
@@ -386,14 +502,6 @@ class WarGame(arcade.Window):
             self.update_game_buttons() 
             if self.btn_action: self.btn_action.draw()
             if self.btn_score: self.btn_score.draw()
-
-            if self.state == GameState.GAME_OVER:
-                overlay = arcade.XYWH(config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2, 500, 300)
-                arcade.draw_rect_filled(overlay, config.COLOR_BLACK)
-                arcade.draw_rect_outline(overlay, config.COLOR_WHITE, 4)
-                arcade.draw_text("GAME OVER", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 + 50, config.COLOR_RED, 40, anchor_x="center", bold=True)
-                arcade.draw_text(f"Final Score: {self.score_total}", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2, config.COLOR_WHITE, 20, anchor_x="center")
-                arcade.draw_text("Click to Restart", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 - 60, (150, 150, 150), 16, anchor_x="center")
 
         ui_elements.draw_shadows(self.joker_list)
         self.joker_list.draw()
@@ -480,6 +588,9 @@ class WarGame(arcade.Window):
         if self.state == GameState.SHOPPING:
             for btn in self.shop_buttons: btn.check_mouse_hover(x, y)
             if self.btn_next_round: self.btn_next_round.check_mouse_hover(x, y)
+        elif self.state == GameState.PACK_OPENING:
+            for btn in self.btn_pack_mods: btn.check_mouse_hover(x, y)
+            self.btn_pack_skip.check_mouse_hover(x, y)
         else:
             if self.btn_action: self.btn_action.check_mouse_hover(x, y)
             if self.btn_score: self.btn_score.check_mouse_hover(x, y)
@@ -504,13 +615,28 @@ class WarGame(arcade.Window):
         if self.state == GameState.SHOPPING:
             for i, btn in enumerate(self.shop_buttons):
                 if btn.is_clicked(x, y):
-                    self.buy_joker(i)
+                    self.buy_shop_item(i)
                     return
             if self.btn_next_round and self.btn_next_round.is_clicked(x, y):
                 self.round_level += 1
                 self.target_score = int(self.target_score * 1.5)
                 self.start_new_round()
                 return
+
+        elif self.state == GameState.PACK_OPENING:
+            if self.btn_pack_skip.is_clicked(x, y):
+                self.state = GameState.SHOPPING
+                self.pack_card_list.clear()
+                return
+            
+            for i, btn in enumerate(self.btn_pack_mods):
+                if btn.is_clicked(x, y):
+                    self.apply_pack_modifier(i)
+                    return
+            
+            hit = arcade.get_sprites_at_point((x, y), self.pack_card_list)
+            for card in hit:
+                card.is_selected = not card.is_selected
 
         elif self.state == GameState.GAME_OVER:
             self.round_level = 1
@@ -541,11 +667,11 @@ class WarGame(arcade.Window):
             else:
                 return 
         
-        # Increment run discards for Waste Management Joker
         self.run_discards += len(to_remove)
 
         for card in to_remove:
-            self.hand_list.remove(card) 
+            self.hand_list.remove(card)
+            self.discard_pile.append(card)
             card.target_y = -300
             card.should_despawn = True 
         
@@ -560,12 +686,12 @@ class WarGame(arcade.Window):
         final_score = base * multi
         self.score_total += final_score
         
-        # Apply coin bonuses from Wishing Well
         if coin_bonus > 0:
             self.coins += coin_bonus
         
         for card in list(self.hand_list): 
             self.hand_list.remove(card)
+            self.discard_pile.append(card) 
             card.target_y = config.SCREEN_HEIGHT + 300 
             card.should_despawn = True
             
@@ -591,6 +717,16 @@ class WarGame(arcade.Window):
             card.target_x = start_x + i * (config.CARD_WIDTH + 20)
             card.target_y = config.HAND_Y
             card.is_selected = False
+
+    def reposition_jokers(self):
+        start_x = config.SCREEN_WIDTH - 100
+        for i, joker in enumerate(self.joker_list):
+            # FIXED: Jokers now lower on screen (SCREEN_HEIGHT - 220 as requested)
+            tx = start_x - (i * (config.JOKER_WIDTH + 50))
+            ty = config.SCREEN_HEIGHT - 220 
+            joker.target_x = tx
+            joker.target_y = ty
+            joker.scale = 0.25
 
 def main():
     window = WarGame()
