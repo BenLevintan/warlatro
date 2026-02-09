@@ -1,5 +1,5 @@
-# ui_elements.py
 import arcade
+import math
 import config
 
 class TextButton:
@@ -45,16 +45,60 @@ class TextButton:
     def is_clicked(self, x, y):
         return self.visible and self.active and self.is_hovered
 
+def get_rotated_points(cx, cy, w, h, angle_deg):
+    """ Helper to calculate the 4 corners of a rotated rectangle """
+    angle_rad = math.radians(angle_deg)
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    
+    # Half dimensions
+    hw = w / 2
+    hh = h / 2
+    
+    # Unrotated corners relative to center
+    corners = [
+        (hw, hh),
+        (-hw, hh),
+        (-hw, -hh),
+        (hw, -hh)
+    ]
+    
+    rotated_points = []
+    for x, y in corners:
+        # Rotate
+        rx = x * cos_a - y * sin_a
+        ry = x * sin_a + y * cos_a
+        # Translate
+        rotated_points.append((cx + rx, cy + ry))
+        
+    return rotated_points
+
 def draw_shadows(sprite_list):
-    """ Draws a drop shadow for every sprite in the list """
+    """ Draws a drop shadow for every sprite, accounting for rotation and scale """
     for sprite in sprite_list:
-        shadow_rect = arcade.XYWH(
-            sprite.center_x + 5, 
-            sprite.center_y - 5, 
-            sprite.width, 
-            sprite.height
+        
+        # Handle safe scale extraction
+        scale = sprite.scale
+        if isinstance(scale, (tuple, list)):
+            scale = scale[0]
+            
+        width = sprite.width
+        height = sprite.height
+        
+        if hasattr(sprite, 'texture') and sprite.texture:
+            width = sprite.texture.width * scale
+            height = sprite.texture.height * scale
+
+        # Calculate rotated points manually
+        points = get_rotated_points(
+            sprite.center_x + 5,
+            sprite.center_y - 5,
+            width,
+            height,
+            -sprite.angle  # FIXED: Negated angle to sync shadow rotation
         )
-        arcade.draw_rect_filled(shadow_rect, config.COLOR_SHADOW)
+
+        arcade.draw_polygon_filled(points, config.COLOR_SHADOW)
 
 def draw_tooltip(hovered_joker, mouse_x, mouse_y):
     if not hovered_joker:
@@ -69,7 +113,6 @@ def draw_tooltip(hovered_joker, mouse_x, mouse_y):
     tip_x = mouse_x + 20
     tip_y = mouse_y - 20
 
-    # Smart Flip: If off-screen right, flip to left
     if tip_x + width > config.SCREEN_WIDTH:
             tip_x = mouse_x - width - 20
     

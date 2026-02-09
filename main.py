@@ -728,6 +728,16 @@ class WarGame(arcade.Window):
             joker.target_y = ty
             joker.scale = 0.25
 
+    def sell_joker(self):
+        """ Sells the selected Joker """
+        to_sell = [j for j in self.joker_list if j.is_selected]
+        for joker in to_sell:
+            self.coins += joker.sell_price
+            joker.remove_from_sprite_lists()
+        
+        self.reposition_jokers()
+        self.btn_sell.visible = False
+
 def main():
     window = WarGame()
     window.setup()
