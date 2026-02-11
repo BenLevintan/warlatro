@@ -1,12 +1,12 @@
 import arcade
 import arcade.gl
-import random
 import enum
-from collections import Counter
 
 import config
 import sprites
 import ui_elements
+import systems
+import scoring
 
 class GameState(enum.Enum):
     DRAWING = 1
@@ -19,22 +19,20 @@ class WarGame(arcade.Window):
     def __init__(self):
         super().__init__(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.SCREEN_TITLE)
         
+        # Managers (Placeholder, will be created in setup)
+        self.deck_manager = None
+        self.shop_manager = systems.ShopManager()
+
         # Sprite Lists
-        self.card_list = None
-        self.hand_list = None
-        self.joker_list = None
-        self.shop_list = None
-        self.pack_card_list = None 
+        self.card_list = arcade.SpriteList()
+        self.hand_list = arcade.SpriteList()
+        self.joker_list = arcade.SpriteList()
+        self.shop_list = arcade.SpriteList()
+        self.pack_card_list = arcade.SpriteList()
         self.drawn_card = None
         
         # Game State
         self.state = GameState.DRAWING
-        
-        # Deck Persistence
-        self.master_deck = []   
-        self.draw_pile = []     
-        self.discard_pile = []  
-        
         self.score_total = 0
         self.hands_played = 0
         self.hands_max = config.BASE_HANDS_TO_PLAY
@@ -73,34 +71,30 @@ class WarGame(arcade.Window):
         self.fbo = self.ctx.framebuffer(color_attachments=[self.screen_texture])
 
     def setup(self):
-        self.card_list = arcade.SpriteList()
-        self.hand_list = arcade.SpriteList()
-        self.joker_list = arcade.SpriteList()
-        self.shop_list = arcade.SpriteList()
-        self.pack_card_list = arcade.SpriteList()
-        self.drawn_card = None
-        
-        self.master_deck = []
-        self.create_initial_deck()
+        """ Completely resets the game state for a new run """
+        # 1. Reset Global Stats
+        self.score_total = 0
+        self.round_level = 1
+        self.target_score = config.BASE_TARGET_SCORE
+        self.coins = 5
         self.run_discards = 0
         
+        # 2. Clear Objects
+        self.joker_list.clear()
+        
+        # 3. CRITICAL FIX: Create a fresh DeckManager (resets deck & modifiers)
+        self.deck_manager = systems.DeckManager()
+        
+        # 4. Start the first round
         self.start_new_round()
-
-    def create_initial_deck(self):
-        suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
-        ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
-        for suit in suits:
-            for rank in ranks:
-                card = sprites.Card(suit, rank, config.CARD_SCALE)
-                self.master_deck.append(card)
 
     def start_new_round(self):
         self.state = GameState.DRAWING
         self.card_list.clear()
         self.hand_list.clear()
         self.shop_list.clear()
-        self.shop_buttons = []
         self.pack_card_list.clear()
+        self.shop_buttons = []
         
         bonus_hands = sum(1 for j in self.joker_list if j.key == "helping_hand")
         self.hands_max = config.BASE_HANDS_TO_PLAY + bonus_hands
@@ -110,20 +104,7 @@ class WarGame(arcade.Window):
         self.message = "" 
         self.hand_details = []
         
-        # Prepare Deck: Reshuffle everything not destroyed
-        self.draw_pile = [c for c in self.master_deck if c.modifier != "destroy"]
-        self.discard_pile = []
-        random.shuffle(self.draw_pile)
-        
-        # Reset cards
-        for card in self.draw_pile:
-            card.should_despawn = False # Safety Reset
-            self.card_list.append(card)
-            card.center_x = config.SCREEN_WIDTH + 200
-            card.center_y = config.DRAWN_CARD_Y
-            card.target_x = config.SCREEN_WIDTH + 200
-            card.target_y = config.DRAWN_CARD_Y
-            card.visible = False 
+        self.deck_manager.start_round(self.card_list)
 
         self.btn_action = ui_elements.TextButton(config.SCREEN_WIDTH/2, 280, 240, 50, "TAKE CARD", config.COLOR_BTN_ACTION)
         self.btn_score = ui_elements.TextButton(config.SCREEN_WIDTH - 150, 150, 200, 60, "SCORE HAND", config.COLOR_BTN_SCORE)
@@ -133,16 +114,9 @@ class WarGame(arcade.Window):
         self.draw_new_card()
 
     def draw_new_card(self):
-        # 1. Check if deck is empty, if so, recycle discards
-        if len(self.draw_pile) == 0 and len(self.discard_pile) > 0:
-            self.recycle_discards()
-
-        # 2. Draw card if available
-        if len(self.draw_pile) > 0:
-            card = self.draw_pile.pop()
-            card.visible = True
-            card.should_despawn = False # CRITICAL: Ensure card doesn't insta-die
-            
+        card = self.deck_manager.draw_card(self.card_list)
+        
+        if card:
             start_x = config.SCREEN_WIDTH + 150
             start_y = config.DRAWN_CARD_Y
             card._phys_x = start_x
@@ -157,20 +131,6 @@ class WarGame(arcade.Window):
         else:
             self.message = "DECK EMPTY!"
 
-    def recycle_discards(self):
-        """ Shuffles discard pile back into draw pile """
-        self.draw_pile = self.discard_pile[:]
-        self.discard_pile = []
-        random.shuffle(self.draw_pile)
-        
-        for card in self.draw_pile:
-            card.should_despawn = False # CRITICAL FIX: Revive card physics
-            if card not in self.card_list:
-                self.card_list.append(card)
-            card.center_x = config.SCREEN_WIDTH + 200
-            card.visible = False
-
-    # --- SHOP SYSTEM ---
     def enter_shop(self):
         self.state = GameState.SHOPPING
         self.message = "SHOP PHASE"
@@ -180,43 +140,8 @@ class WarGame(arcade.Window):
         self.coins += reward
         self.message = f"Round Cleared!\nEarned ${reward}."
 
-        self.shop_list.clear()
-        self.shop_buttons = []
+        self.shop_manager.generate_shop(self.shop_list, self.shop_buttons, self.joker_list)
         
-        slots = ['Pack', 'Joker']
-        slots.append(random.choice(['Pack', 'Joker']))
-        
-        owned_keys = [j.key for j in self.joker_list]
-        available_jokers = [k for k in config.JOKER_DATA.keys() if k not in owned_keys]
-        
-        start_x = config.SCREEN_WIDTH / 2 - 200
-        for i, item_type in enumerate(slots):
-            pos_x = start_x + (i * 200)
-            pos_y = config.SCREEN_HEIGHT / 2 + 100
-            
-            if item_type == 'Pack':
-                item = sprites.Pack(config.JOKER_SCALE)
-                item.center_x = pos_x
-                item.center_y = pos_y
-                self.shop_list.append(item)
-                
-                btn = ui_elements.TextButton(pos_x, pos_y - 170, 120, 40, f"BUY ${config.PACK_COST}", config.COLOR_PURPLE)
-                self.shop_buttons.append(btn)
-                
-            elif item_type == 'Joker' and available_jokers:
-                key = random.choice(available_jokers)
-                available_jokers.remove(key) 
-                
-                item = sprites.Joker(key, config.JOKER_SCALE)
-                item._phys_x = pos_x
-                item._phys_y = pos_y
-                item.target_x = pos_x
-                item.target_y = pos_y
-                self.shop_list.append(item)
-                
-                btn = ui_elements.TextButton(pos_x, pos_y - 170, 120, 40, f"BUY ${item.cost}", config.COLOR_BTN_SHOP)
-                self.shop_buttons.append(btn)
-
         self.btn_next_round = ui_elements.TextButton(config.SCREEN_WIDTH - 150, 80, 200, 60, "NEXT LEVEL >", config.COLOR_GREEN)
         self.update_shop_buttons()
 
@@ -253,16 +178,13 @@ class WarGame(arcade.Window):
                 self.shop_buttons.pop(index)
                 self.start_pack_opening()
 
-    # --- PACK OPENING LOGIC ---
     def start_pack_opening(self):
         self.state = GameState.PACK_OPENING
         self.message = "Select Cards then Choose Modifier"
         self.pack_card_list.clear()
         self.btn_pack_mods = []
         
-        available = [c for c in self.master_deck if c.modifier != "destroy"]
-        num_to_draw = min(8, len(available))
-        chosen_cards = random.sample(available, num_to_draw)
+        chosen_cards = self.shop_manager.get_pack_cards(self.deck_manager.master_deck)
         
         start_x = config.SCREEN_WIDTH / 2 - 250
         start_y = config.SCREEN_HEIGHT / 2 + 100
@@ -281,8 +203,7 @@ class WarGame(arcade.Window):
             card.target_x = tx
             card.target_y = ty
 
-        keys = list(config.MODIFIER_DATA.keys())
-        self.pack_modifiers_offered = random.sample(keys, 2)
+        self.pack_modifiers_offered = self.shop_manager.get_pack_modifiers()
         
         bx = config.SCREEN_WIDTH / 2 - 100
         by = 150
@@ -307,107 +228,58 @@ class WarGame(arcade.Window):
         self.pack_card_list.clear() 
         self.message = "Applied!"
 
-    # --- SCORING LOGIC ---
-    def calculate_score(self):
-        if not self.hand_list: return 0, 1, [], 0
-
-        base_sum = sum(c.value for c in self.hand_list)
+    def score_hand(self):
+        base, multi, desc, coin_bonus = scoring.calculate_hand_score(
+            self.hand_list, self.joker_list, self.run_discards
+        )
+        final_score = base * multi
+        self.score_total += final_score
         
-        additive_mult = 1
-        final_multiplier = 1
-        coin_bonus = 0 
-        bonus_points = 0
-        breakdown = []
-
-        ranks = [c.rank for c in self.hand_list]
-        rank_counts = Counter(ranks).values()
+        if coin_bonus > 0:
+            self.coins += coin_bonus
         
-        has_pair = False
-        has_trip = False
+        for card in list(self.hand_list): 
+            self.hand_list.remove(card)
+            self.deck_manager.discard_pile.append(card) 
+            card.target_y = config.SCREEN_HEIGHT + 300 
+            card.should_despawn = True
+            
+        self.hand_list.clear()
         
-        if 4 in rank_counts:
-            additive_mult += 8
-            breakdown.append("Quad(+8)")
-        elif 3 in rank_counts:
-            additive_mult += 3
-            breakdown.append("Trip(+3)")
-            has_trip = True
+        if self.score_total >= self.target_score:
+            self.enter_shop()
+            return
+
+        self.hands_played += 1
+        if self.hands_played >= self.hands_max:
+            self.state = GameState.GAME_OVER
+        else:
+            self.message = f"Scored {final_score}! ({base} x {multi})"
+            if coin_bonus > 0:
+                self.message += f" Earned ${coin_bonus}!"
+
+    def process_swap(self):
+        to_remove = [c for c in self.hand_list if c.is_selected]
+        if len(to_remove) > 0:
+            if self.discards_left > 0:
+                self.discards_left -= 1
+            else:
+                return 
         
-        pair_count = list(rank_counts).count(2)
-        if pair_count > 0:
-            bonus = pair_count * 2
-            additive_mult += bonus
-            breakdown.append(f"{pair_count} Pair(+{bonus})")
-            has_pair = True
+        self.run_discards += len(to_remove)
 
-        suits = [c.suit for c in self.hand_list]
-        if 5 in Counter(suits).values():
-            additive_mult += 3
-            breakdown.append("Flush(+3)")
-
-        colors = [c.color_type for c in self.hand_list]
-        if 5 in Counter(colors).values():
-            additive_mult += 2
-            breakdown.append("Color(+2)")
-
-        sorted_ranks = sorted([c.value for c in self.hand_list])
-        unique_ranks = sorted(list(set(sorted_ranks)))
-        has_3_straight = False
-        consecutive = 0
-        for i in range(len(unique_ranks) - 1):
-            if unique_ranks[i+1] == unique_ranks[i] + 1:
-                consecutive += 1
-                if consecutive >= 2: has_3_straight = True
-            else: consecutive = 0
-        if {14, 2, 3}.issubset(set(unique_ranks)): has_3_straight = True
-
-        for card in self.hand_list:
-            if card.modifier == "bonus_chips":
-                bonus_points += 10
-                breakdown.append("Bonus(+10)")
-            elif card.modifier == "mult_plus":
-                additive_mult += 4
-                breakdown.append("Mult(+4)")
-
-        for joker in self.joker_list:
-            if joker.key == "pear_up" and (has_pair or has_trip): 
-                additive_mult += 8
-                breakdown.append("PearUp(+8)")
-            if joker.key == "triple_treat" and has_trip:
-                additive_mult += 12
-                breakdown.append("TripTreat(+12)")
-            if joker.key == "inflation" and len(self.hand_list) <= 4:
-                additive_mult += 12
-                breakdown.append("Inflation(+12)")
-            if joker.key == "the_regular":
-                additive_mult += 4
-                breakdown.append("Regular(+4)")
-            if joker.key == "waste_management":
-                wm_bonus = self.run_discards // 3
-                if wm_bonus > 0:
-                    additive_mult += wm_bonus
-                    breakdown.append(f"WasteMan(+{wm_bonus})")
-            if joker.key == "diamond_geezer":
-                diamond_count = sum(1 for c in self.hand_list if c.suit == 'Diamonds')
-                if diamond_count > 0:
-                    dg_bonus = diamond_count * 4
-                    additive_mult += dg_bonus
-                    breakdown.append(f"Geezer(+{dg_bonus})")
-            if joker.key == "wishing_well":
-                wish_hits = sum(1 for c in self.hand_list if c.value in [14, 2, 3]) 
-                if wish_hits > 0:
-                    coin_bonus += wish_hits
-                    breakdown.append(f"Wish(+${wish_hits})")
+        for card in to_remove:
+            self.hand_list.remove(card)
+            self.deck_manager.discard_pile.append(card)
+            card.target_y = -300
+            card.should_despawn = True 
         
-        for joker in self.joker_list:
-            if joker.key == "multi_python" and has_3_straight:
-                final_multiplier *= 2
-                breakdown.append("Python(x2)")
+        if self.drawn_card:
+            self.hand_list.append(self.drawn_card)
+            self.drawn_card = None
+            self.reposition_hand()
+            self.draw_new_card()
 
-        total_mult = additive_mult * final_multiplier
-        total_base = base_sum + bonus_points
-        return total_base, total_mult, breakdown, coin_bonus
-    
     def on_update(self, delta_time):
         self.shader_time += delta_time
         self.card_list.update()
@@ -416,15 +288,14 @@ class WarGame(arcade.Window):
         if self.state == GameState.PACK_OPENING:
             self.pack_card_list.update()
         
-        # Fix for invisible hand cards
         for card in self.hand_list:
             card.visible = True
 
     def draw_game_contents(self):
-        # 1. Backgrounds
+        # Backgrounds
         arcade.draw_rect_filled(arcade.XYWH(config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT - 40, config.SCREEN_WIDTH, 80), config.COLOR_UI_BG)
         
-        # 2. Stats Text
+        # Stats
         arcade.draw_text(f"Lvl: {self.round_level}", 20, config.SCREEN_HEIGHT - 50, config.COLOR_WHITE, 16)
         arcade.draw_text(f"Target: {self.score_total} / {self.target_score}", 150, config.SCREEN_HEIGHT - 50, config.COLOR_WHITE, 20, bold=True)
         arcade.draw_text(f"Coins: ${self.coins}", config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT - 50, config.COLOR_GOLD, 20, bold=True, anchor_x="center")
@@ -434,7 +305,7 @@ class WarGame(arcade.Window):
              color_disc = config.COLOR_BTN_ACTION if self.discards_left > 0 else config.COLOR_RED
              arcade.draw_text(f"Discards: {self.discards_left}", config.SCREEN_WIDTH - 250, config.SCREEN_HEIGHT - 65, color_disc, 16, anchor_x="right")
 
-        # 3. Game Area
+        # Game Area
         if self.state == GameState.SHOPPING:
             arcade.draw_text(self.message, config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT - 150, config.COLOR_WHITE, 20, anchor_x="center", align="center")
             ui_elements.draw_shadows(self.shop_list)
@@ -462,16 +333,11 @@ class WarGame(arcade.Window):
             arcade.draw_text("Click to Restart", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 - 60, (150, 150, 150), 16, anchor_x="center")
 
         else: # Playing
-            # Deck Counter
             if self.message:
                 arcade.draw_text(self.message, config.SCREEN_WIDTH/2, 380, config.COLOR_WHITE, 16, anchor_x="center", align="center")
             
-            # --- Deck Count Logic ---
-            current_deck_count = len(self.draw_pile) + len(self.discard_pile) # Corrected logic for full run cycle
-            # Or just count draw pile? Usually in roguelikes you see remaining draw.
-            # User asked for x/52.
-            total_deck_size = len([c for c in self.master_deck if c.modifier != "destroy"])
-            arcade.draw_text(f"Deck: {len(self.draw_pile)} / {total_deck_size}", config.DRAWN_CARD_X, config.DRAWN_CARD_Y - 130, config.COLOR_WHITE, 12, anchor_x="center", bold=True)
+            cur_deck, total_deck = self.deck_manager.get_deck_counts()
+            arcade.draw_text(f"Deck: {cur_deck} / {total_deck}", config.DRAWN_CARD_X, config.DRAWN_CARD_Y - 130, config.COLOR_WHITE, 12, anchor_x="center", bold=True)
 
             start_y = 200
             for i, line in enumerate(self.hand_details):
@@ -558,7 +424,9 @@ class WarGame(arcade.Window):
                 self.btn_action.active = True
 
         if len(self.hand_list) > 0:
-            s, m, desc, coin_bonus = self.calculate_score()
+            s, m, desc, coin_bonus = scoring.calculate_hand_score(
+                self.hand_list, self.joker_list, self.run_discards
+            )
             total = s * m
             self.btn_score.text = f"PLAY HAND\n{s} x {m} = {total}"
             if coin_bonus > 0:
@@ -639,10 +507,7 @@ class WarGame(arcade.Window):
                 card.is_selected = not card.is_selected
 
         elif self.state == GameState.GAME_OVER:
-            self.round_level = 1
-            self.target_score = config.BASE_TARGET_SCORE
-            self.coins = 5
-            self.joker_list.clear()
+            # FIX: Just call setup(), which now handles everything
             self.setup()
             return
 
@@ -659,56 +524,6 @@ class WarGame(arcade.Window):
                 for card in cards_clicked:
                     card.is_selected = not card.is_selected
 
-    def process_swap(self):
-        to_remove = [c for c in self.hand_list if c.is_selected]
-        if len(to_remove) > 0:
-            if self.discards_left > 0:
-                self.discards_left -= 1
-            else:
-                return 
-        
-        self.run_discards += len(to_remove)
-
-        for card in to_remove:
-            self.hand_list.remove(card)
-            self.discard_pile.append(card)
-            card.target_y = -300
-            card.should_despawn = True 
-        
-        if self.drawn_card:
-            self.hand_list.append(self.drawn_card)
-            self.drawn_card = None
-            self.reposition_hand()
-            self.draw_new_card()
-
-    def score_hand(self):
-        base, multi, _, coin_bonus = self.calculate_score()
-        final_score = base * multi
-        self.score_total += final_score
-        
-        if coin_bonus > 0:
-            self.coins += coin_bonus
-        
-        for card in list(self.hand_list): 
-            self.hand_list.remove(card)
-            self.discard_pile.append(card) 
-            card.target_y = config.SCREEN_HEIGHT + 300 
-            card.should_despawn = True
-            
-        self.hand_list.clear()
-        
-        if self.score_total >= self.target_score:
-            self.enter_shop()
-            return
-
-        self.hands_played += 1
-        if self.hands_played >= self.hands_max:
-            self.state = GameState.GAME_OVER
-        else:
-            self.message = f"Scored {final_score}! ({base} x {multi})"
-            if coin_bonus > 0:
-                self.message += f" Earned ${coin_bonus}!"
-
     def reposition_hand(self):
         self.hand_list.sort(key=lambda c: (c.value, c.suit))
         
@@ -721,7 +536,6 @@ class WarGame(arcade.Window):
     def reposition_jokers(self):
         start_x = config.SCREEN_WIDTH - 100
         for i, joker in enumerate(self.joker_list):
-            # FIXED: Jokers now lower on screen (SCREEN_HEIGHT - 220 as requested)
             tx = start_x - (i * (config.JOKER_WIDTH + 50))
             ty = config.SCREEN_HEIGHT - 220 
             joker.target_x = tx
@@ -729,7 +543,6 @@ class WarGame(arcade.Window):
             joker.scale = 0.25
 
     def sell_joker(self):
-        """ Sells the selected Joker """
         to_sell = [j for j in self.joker_list if j.is_selected]
         for joker in to_sell:
             self.coins += joker.sell_price
@@ -737,6 +550,9 @@ class WarGame(arcade.Window):
         
         self.reposition_jokers()
         self.btn_sell.visible = False
+        
+        if self.state == GameState.SHOPPING:
+            self.update_shop_buttons()
 
 def main():
     window = WarGame()
