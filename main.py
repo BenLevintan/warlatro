@@ -5,8 +5,8 @@ import enum
 import config
 import sprites
 import ui_elements
-import systems   # NEW
-import scoring   # NEW
+import systems   # New Import
+import scoring   # New Import
 
 class GameState(enum.Enum):
     DRAWING = 1
@@ -19,7 +19,7 @@ class WarGame(arcade.Window):
     def __init__(self):
         super().__init__(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.SCREEN_TITLE)
         
-        # Managers (The brains)
+        # Managers
         self.deck_manager = systems.DeckManager()
         self.shop_manager = systems.ShopManager()
 
@@ -91,7 +91,6 @@ class WarGame(arcade.Window):
         self.message = "" 
         self.hand_details = []
         
-        # Delegate Deck Setup to Manager
         self.deck_manager.start_round(self.card_list)
 
         self.btn_action = ui_elements.TextButton(config.SCREEN_WIDTH/2, 280, 240, 50, "TAKE CARD", config.COLOR_BTN_ACTION)
@@ -102,7 +101,6 @@ class WarGame(arcade.Window):
         self.draw_new_card()
 
     def draw_new_card(self):
-        # Delegate Drawing to Manager
         card = self.deck_manager.draw_card(self.card_list)
         
         if card:
@@ -129,7 +127,6 @@ class WarGame(arcade.Window):
         self.coins += reward
         self.message = f"Round Cleared!\nEarned ${reward}."
 
-        # Delegate Shop Generation
         self.shop_manager.generate_shop(self.shop_list, self.shop_buttons, self.joker_list)
         
         self.btn_next_round = ui_elements.TextButton(config.SCREEN_WIDTH - 150, 80, 200, 60, "NEXT LEVEL >", config.COLOR_GREEN)
@@ -174,7 +171,6 @@ class WarGame(arcade.Window):
         self.pack_card_list.clear()
         self.btn_pack_mods = []
         
-        # Delegate Pack Logic
         chosen_cards = self.shop_manager.get_pack_cards(self.deck_manager.master_deck)
         
         start_x = config.SCREEN_WIDTH / 2 - 250
@@ -220,7 +216,6 @@ class WarGame(arcade.Window):
         self.message = "Applied!"
 
     def score_hand(self):
-        # Delegate Scoring to scoring.py
         base, multi, desc, coin_bonus = scoring.calculate_hand_score(
             self.hand_list, self.joker_list, self.run_discards
         )
@@ -230,7 +225,6 @@ class WarGame(arcade.Window):
         if coin_bonus > 0:
             self.coins += coin_bonus
         
-        # Move played cards to discard
         for card in list(self.hand_list): 
             self.hand_list.remove(card)
             self.deck_manager.discard_pile.append(card) 
@@ -281,7 +275,6 @@ class WarGame(arcade.Window):
         if self.state == GameState.PACK_OPENING:
             self.pack_card_list.update()
         
-        # Ensure hand visibility
         for card in self.hand_list:
             card.visible = True
 
@@ -330,7 +323,6 @@ class WarGame(arcade.Window):
             if self.message:
                 arcade.draw_text(self.message, config.SCREEN_WIDTH/2, 380, config.COLOR_WHITE, 16, anchor_x="center", align="center")
             
-            # Use Deck Manager for stats
             cur_deck, total_deck = self.deck_manager.get_deck_counts()
             arcade.draw_text(f"Deck: {cur_deck} / {total_deck}", config.DRAWN_CARD_X, config.DRAWN_CARD_Y - 130, config.COLOR_WHITE, 12, anchor_x="center", bold=True)
 
@@ -419,7 +411,6 @@ class WarGame(arcade.Window):
                 self.btn_action.active = True
 
         if len(self.hand_list) > 0:
-            # Delegate Score Calculation
             s, m, desc, coin_bonus = scoring.calculate_hand_score(
                 self.hand_list, self.joker_list, self.run_discards
             )
@@ -550,6 +541,9 @@ class WarGame(arcade.Window):
         
         self.reposition_jokers()
         self.btn_sell.visible = False
+
+        if self.state == GameState.SHOPPING:
+            self.update_shop_buttons()
 
 def main():
     window = WarGame()
