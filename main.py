@@ -5,8 +5,8 @@ import enum
 import config
 import sprites
 import ui_elements
-import systems   # New Import
-import scoring   # New Import
+import systems
+import scoring
 
 class GameState(enum.Enum):
     DRAWING = 1
@@ -19,8 +19,8 @@ class WarGame(arcade.Window):
     def __init__(self):
         super().__init__(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.SCREEN_TITLE)
         
-        # Managers
-        self.deck_manager = systems.DeckManager()
+        # Managers (Placeholder, will be created in setup)
+        self.deck_manager = None
         self.shop_manager = systems.ShopManager()
 
         # Sprite Lists
@@ -71,8 +71,21 @@ class WarGame(arcade.Window):
         self.fbo = self.ctx.framebuffer(color_attachments=[self.screen_texture])
 
     def setup(self):
+        """ Completely resets the game state for a new run """
+        # 1. Reset Global Stats
+        self.score_total = 0
+        self.round_level = 1
+        self.target_score = config.BASE_TARGET_SCORE
+        self.coins = 5
         self.run_discards = 0
+        
+        # 2. Clear Objects
         self.joker_list.clear()
+        
+        # 3. CRITICAL FIX: Create a fresh DeckManager (resets deck & modifiers)
+        self.deck_manager = systems.DeckManager()
+        
+        # 4. Start the first round
         self.start_new_round()
 
     def start_new_round(self):
@@ -494,10 +507,7 @@ class WarGame(arcade.Window):
                 card.is_selected = not card.is_selected
 
         elif self.state == GameState.GAME_OVER:
-            self.round_level = 1
-            self.target_score = config.BASE_TARGET_SCORE
-            self.coins = 5
-            self.joker_list.clear()
+            # FIX: Just call setup(), which now handles everything
             self.setup()
             return
 
@@ -533,7 +543,6 @@ class WarGame(arcade.Window):
             joker.scale = 0.25
 
     def sell_joker(self):
-        """ Sells the selected Joker """
         to_sell = [j for j in self.joker_list if j.is_selected]
         for joker in to_sell:
             self.coins += joker.sell_price
@@ -541,7 +550,7 @@ class WarGame(arcade.Window):
         
         self.reposition_jokers()
         self.btn_sell.visible = False
-
+        
         if self.state == GameState.SHOPPING:
             self.update_shop_buttons()
 

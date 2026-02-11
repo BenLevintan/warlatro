@@ -22,7 +22,6 @@ class DeckManager:
 
     def start_round(self, visual_card_list):
         """ Resets piles for a new round and repopulates the visual sprite list """
-        # Only use cards that haven't been destroyed
         self.draw_pile = [c for c in self.master_deck if c.modifier != "destroy"]
         self.discard_pile = []
         random.shuffle(self.draw_pile)
@@ -48,7 +47,7 @@ class DeckManager:
         if len(self.draw_pile) > 0:
             card = self.draw_pile.pop()
             card.visible = True
-            card.should_despawn = False
+            card.should_despawn = False # Logic Fix: Ensure physics are active
             return card
         return None
 
@@ -58,14 +57,14 @@ class DeckManager:
         random.shuffle(self.draw_pile)
         
         for card in self.draw_pile:
-            card.should_despawn = False 
+            card.should_despawn = False # Logic Fix: Ensure physics are active
             card.visible = False
             card.center_x = config.SCREEN_WIDTH + 200
             if card not in visual_card_list:
                 visual_card_list.append(card)
     
     def get_deck_counts(self):
-        """ Returns (current_draw_pile, total_valid_cards) """
+        """ Returns (current_cards, total_valid_cards) """
         total = len([c for c in self.master_deck if c.modifier != "destroy"])
         current = len(self.draw_pile) + len(self.discard_pile)
         return current, total
