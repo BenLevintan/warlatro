@@ -92,11 +92,15 @@ class WarGame(arcade.Window):
         self.pack_card_list.clear()
         self.shop_buttons = []
         
+        # --- JOKER LOGIC (Start Round) ---
         bonus_hands = sum(1 for j in self.joker_list if j.key == "helping_hand")
+        bonus_discards = sum(1 for j in self.joker_list if j.key == "mulligan")
+        
         self.hands_max = config.BASE_HANDS_TO_PLAY + bonus_hands
+        self.discards_left = config.MAX_DISCARDS + bonus_discards
+        
         self.hands_played = 0
         self.score_total = 0
-        self.discards_left = config.MAX_DISCARDS
         self.message = "" 
         self.hand_details = []
         
@@ -131,6 +135,7 @@ class WarGame(arcade.Window):
         self.state = GameState.SHOPPING
         self.message = "SHOP PHASE"
         
+        # Standard Reward
         hands_left = max(0, self.hands_max - self.hands_played)
         reward = (hands_left * 2) + (self.discards_left * 1)
         self.coins += reward
@@ -498,14 +503,12 @@ class WarGame(arcade.Window):
                     self.apply_pack_modifier(i)
                     return
             
-            # --- UPDATED: Limit selection to 2 cards ---
             hit = arcade.get_sprites_at_point((x, y), self.pack_card_list)
             if hit:
                 card = hit[0]
                 if card.is_selected:
                     card.is_selected = False
                 else:
-                    # Check limit
                     num_selected = len([c for c in self.pack_card_list if c.is_selected])
                     if num_selected < 2:
                         card.is_selected = True
