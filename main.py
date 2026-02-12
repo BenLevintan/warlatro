@@ -19,7 +19,7 @@ class WarGame(arcade.Window):
     def __init__(self):
         super().__init__(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.SCREEN_TITLE)
         
-        # Managers (Placeholder, will be created in setup)
+        # Managers
         self.deck_manager = None
         self.shop_manager = systems.ShopManager()
 
@@ -72,20 +72,16 @@ class WarGame(arcade.Window):
 
     def setup(self):
         """ Completely resets the game state for a new run """
-        # 1. Reset Global Stats
         self.score_total = 0
         self.round_level = 1
         self.target_score = config.BASE_TARGET_SCORE
         self.coins = 5
         self.run_discards = 0
         
-        # 2. Clear Objects
         self.joker_list.clear()
         
-        # 3. CRITICAL FIX: Create a fresh DeckManager (resets deck & modifiers)
         self.deck_manager = systems.DeckManager()
         
-        # 4. Start the first round
         self.start_new_round()
 
     def start_new_round(self):
@@ -502,12 +498,21 @@ class WarGame(arcade.Window):
                     self.apply_pack_modifier(i)
                     return
             
+            # --- UPDATED: Limit selection to 2 cards ---
             hit = arcade.get_sprites_at_point((x, y), self.pack_card_list)
-            for card in hit:
-                card.is_selected = not card.is_selected
+            if hit:
+                card = hit[0]
+                if card.is_selected:
+                    card.is_selected = False
+                else:
+                    # Check limit
+                    num_selected = len([c for c in self.pack_card_list if c.is_selected])
+                    if num_selected < 2:
+                        card.is_selected = True
+                    else:
+                        self.message = "Select only 2 cards!"
 
         elif self.state == GameState.GAME_OVER:
-            # FIX: Just call setup(), which now handles everything
             self.setup()
             return
 
