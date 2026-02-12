@@ -2,9 +2,7 @@ import arcade
 import sys
 import os
 
-# --- PATH HELPER FUNCTION (REQUIRED FOR EXE) ---
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -12,7 +10,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # --- Constants ---
-SCREEN_WIDTH = 1480  # UPDATED
+SCREEN_WIDTH = 1480
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "Warlatro: Roguelike War (Retro Edition)"
 
@@ -34,7 +32,7 @@ DRAWN_CARD_Y = 480
 STIFFNESS = 0.1  
 DAMPING = 0.75   
 
-# Floating / Breathing Animation
+# Floating
 FLOAT_SPEED = 3.0       
 FLOAT_RANGE = 3.0       
 JOKER_ROT_SPEED = 2.0   
@@ -45,7 +43,7 @@ MAX_HAND_SIZE = 5
 BASE_HANDS_TO_PLAY = 3
 MAX_DISCARDS = 5
 BASE_TARGET_SCORE = 300
-MAX_JOKERS = 3
+MAX_JOKERS = 5 # Increased slightly for fun
 
 # --- Colors ---
 COLOR_BG = (59, 122, 87)            
@@ -67,7 +65,9 @@ COLOR_SHADOW = (0, 0, 0, 100)
 COLOR_TOOLTIP_BG = (20, 20, 20, 230) 
 
 # --- Joker Definitions ---
+# ONLY JOKERS WITH FILES IN assets/jokers/ ARE INCLUDED HERE
 JOKER_DATA = {
+    # --- ORIGINAL ---
     "pear_up": {
         "name": "Pear-Up", "cost": 4, "desc": "+8 Mult if Pair", 
         "file": resource_path("assets/jokers/pear_up.jpg")
@@ -103,6 +103,32 @@ JOKER_DATA = {
     "the_regular": {
         "name": "The Regular", "cost": 4, "desc": "+4 Mult",
         "file": resource_path("assets/jokers/the_regular.jpg")
+    },
+    
+    # --- NEW JOKERS (Verified Files) ---
+    "potato_chip": {
+        "name": "Potato Chip", "cost": 4, "desc": "+50 Chips", 
+        "file": resource_path("assets/jokers/potato_chip.jpg")
+    },
+    "club_sandwich": {
+        "name": "Club Sandwich", "cost": 6, "desc": "+20 Chips for each Club played", 
+        "file": resource_path("assets/jokers/club_sandwich.jpg")
+    },
+    "mulligan": {
+        "name": "The Mulligan", "cost": 5, "desc": "+1 Discard per Round", 
+        "file": resource_path("assets/jokers/the_muligan.jpg") # Note: 'muligan' with one L in file
+    },
+    "face_value": {
+        "name": "Face Value", "cost": 6, "desc": "+4 Mult for each Face Card played", 
+        "file": resource_path("assets/jokers/face_value.jpg")
+    },
+    "odd_todd": {
+        "name": "Odd Todd", "cost": 5, "desc": "+30 Chips for Odd card (A,3,5,7,9)", 
+        "file": resource_path("assets/jokers/odd_todd.jpg")
+    },
+    "double_trouble": {
+        "name": "Double Trouble", "cost": 7, "desc": "x2 Mult if Two Pair", 
+        "file": resource_path("assets/jokers/double_trouble.jpg")
     }
 }
 
