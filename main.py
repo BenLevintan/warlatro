@@ -75,7 +75,7 @@ class WarGame(arcade.Window):
         self.score_total = 0
         self.round_level = 1
         self.target_score = config.BASE_TARGET_SCORE
-        self.coins = 5
+        self.coins = 99995
         self.run_discards = 0
         
         self.joker_list.clear()

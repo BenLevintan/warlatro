@@ -1,10 +1,76 @@
+import random
 from collections import Counter
 
-def calculate_hand_score(hand_list, joker_list, run_discards):
-    """ 
-    Calculates the score for the current hand, applying all card modifiers
-    and Joker effects.
+def get_hand_type(hand_list):
     """
+    Analyzes the played cards and returns the best Poker Hand type info.
+    Returns: (hand_type_string, boolean_flags_dict)
+    """
+    if not hand_list:
+        return "Empty", {}
+
+    # Basic Data
+    ranks = [c.value for c in hand_list]
+    suits = [c.suit for c in hand_list]
+    
+    # Counts (e.g., [3, 2] for Full House, [2, 2, 1] for Two Pair)
+    rank_counts = Counter(ranks).values()
+    sorted_counts = sorted(rank_counts, reverse=True)
+    
+    # Flush Check (5 cards minimum)
+    is_flush = False
+    if len(suits) >= 5:
+        suit_counts = Counter(suits).values()
+        if 5 in suit_counts:
+            is_flush = True
+
+    # Straight Check (5 cards minimum)
+    is_straight = False
+    if len(ranks) >= 5:
+        unique_ranks = sorted(list(set(ranks)))
+        # Check for 5 consecutive numbers
+        # We check sub-windows of 5 items
+        if len(unique_ranks) >= 5:
+            for i in range(len(unique_ranks) - 4):
+                window = unique_ranks[i:i+5]
+                if window[-1] - window[0] == 4:
+                    is_straight = True
+                    break
+            # Ace Low Check (14, 2, 3, 4, 5) -> {2,3,4,5,14}
+            if {14, 2, 3, 4, 5}.issubset(set(unique_ranks)):
+                is_straight = True
+
+    # --- DETERMINE HAND TYPE ---
+    hand_type = "High Card"
+    
+    # Straight Flush
+    if is_straight and is_flush:
+        hand_type = "Straight Flush"
+    # 4 of a Kind
+    elif 4 in sorted_counts:
+        hand_type = "4 of a Kind"
+    # Full House (3, 2)
+    elif sorted_counts == [3, 2]:
+        hand_type = "Full House"
+    # Flush
+    elif is_flush:
+        hand_type = "Flush"
+    # Straight
+    elif is_straight:
+        hand_type = "Straight"
+    # 3 of a Kind (3, 1, 1 or just 3)
+    elif 3 in sorted_counts:
+        hand_type = "3 of a Kind"
+    # Two Pair (2, 2, 1 or 2, 2)
+    elif sorted_counts[:2] == [2, 2]:
+        hand_type = "Two Pair"
+    # Pair
+    elif 2 in sorted_counts:
+        hand_type = "Pair"
+
+    return hand_type
+
+def calculate_hand_score(hand_list, joker_list, run_discards):
     if not hand_list: 
         return 0, 1, [], 0
 
@@ -15,52 +81,49 @@ def calculate_hand_score(hand_list, joker_list, run_discards):
     bonus_points = 0
     breakdown = []
 
-    # 1. Analyze Hand Rank (Pair, Flush, etc.)
-    ranks = [c.rank for c in hand_list]
-    rank_counts = Counter(ranks).values()
+    # 1. Identify Hand Type
+    hand_type = get_hand_type(hand_list)
     
-    has_pair = False
-    has_trip = False
-    
-    if 4 in rank_counts:
+    # 2. Apply Base Scoring for Hand Type
+    # (Simplified Balatro-style base scores)
+    if hand_type == "Straight Flush":
+        base_sum += 100
         additive_mult += 8
-        breakdown.append("Quad(+8)")
-    elif 3 in rank_counts:
+        breakdown.append("StrFlush")
+    elif hand_type == "4 of a Kind":
+        base_sum += 60
+        additive_mult += 7
+        breakdown.append("4-Kind")
+    elif hand_type == "Full House":
+        base_sum += 40
+        additive_mult += 4
+        breakdown.append("FullHouse")
+    elif hand_type == "Flush":
+        base_sum += 35
+        additive_mult += 4
+        breakdown.append("Flush")
+    elif hand_type == "Straight":
+        base_sum += 30
+        additive_mult += 4
+        breakdown.append("Straight")
+    elif hand_type == "3 of a Kind":
+        base_sum += 30
         additive_mult += 3
-        breakdown.append("Trip(+3)")
-        has_trip = True
-    
-    pair_count = list(rank_counts).count(2)
-    if pair_count > 0:
-        bonus = pair_count * 2
-        additive_mult += bonus
-        breakdown.append(f"{pair_count} Pair(+{bonus})")
-        has_pair = True
-
-    suits = [c.suit for c in hand_list]
-    if 5 in Counter(suits).values():
-        additive_mult += 3
-        breakdown.append("Flush(+3)")
-
-    colors = [c.color_type for c in hand_list]
-    if 5 in Counter(colors).values():
+        breakdown.append("3-Kind")
+    elif hand_type == "Two Pair":
+        base_sum += 20
         additive_mult += 2
-        breakdown.append("Color(+2)")
+        breakdown.append("TwoPair")
+    elif hand_type == "Pair":
+        base_sum += 10
+        additive_mult += 2
+        breakdown.append("Pair")
+    else:
+        # High Card
+        base_sum += 5
+        additive_mult += 1
 
-    # Straights
-    sorted_ranks = sorted([c.value for c in hand_list])
-    unique_ranks = sorted(list(set(sorted_ranks)))
-    has_3_straight = False
-    consecutive = 0
-    for i in range(len(unique_ranks) - 1):
-        if unique_ranks[i+1] == unique_ranks[i] + 1:
-            consecutive += 1
-            if consecutive >= 2: has_3_straight = True
-        else: consecutive = 0
-    # Ace low straight check (A, 2, 3)
-    if {14, 2, 3}.issubset(set(unique_ranks)): has_3_straight = True
-
-    # 2. Card Modifiers
+    # 3. Card Modifiers
     for card in hand_list:
         if card.modifier == "bonus_chips":
             bonus_points += 10
@@ -69,42 +132,112 @@ def calculate_hand_score(hand_list, joker_list, run_discards):
             additive_mult += 4
             breakdown.append("Mult(+4)")
 
-    # 3. Joker Effects
+    # 4. Joker Effects
+    # We iterate through jokers and apply logic based on the detected hand_type
+    # or specific card properties.
+    
     for joker in joker_list:
-        if joker.key == "pear_up" and (has_pair or has_trip): 
+        
+        # --- HAND TYPE TRIGGERS ---
+        if joker.key == "pear_up" and "Pair" in hand_type: # Matches Pair, Two Pair
             additive_mult += 8
-            breakdown.append("PearUp(+8)")
-        if joker.key == "triple_treat" and has_trip:
+            breakdown.append("Pear(+8)")
+            
+        if joker.key == "triple_treat" and hand_type in ["3 of a Kind", "Full House", "4 of a Kind"]:
             additive_mult += 12
-            breakdown.append("TripTreat(+12)")
+            breakdown.append("TripTrt(+12)")
+            
+        if joker.key == "double_trouble" and hand_type == "Two Pair":
+            final_multiplier *= 2
+            breakdown.append("DblTrbl(x2)")
+            
+        if joker.key == "brick_house" and hand_type == "Full House":
+            final_multiplier *= 3
+            breakdown.append("Brick(x3)")
+
+        if joker.key == "multi_python":
+            # Special Logic: 3-card straight (subset of cards)
+            # We re-use logic just for this joker
+            sorted_ranks = sorted(list(set(c.value for c in hand_list)))
+            has_3_straight = False
+            consecutive = 0
+            for i in range(len(sorted_ranks) - 1):
+                if sorted_ranks[i+1] == sorted_ranks[i] + 1:
+                    consecutive += 1
+                    if consecutive >= 2: has_3_straight = True
+                else: consecutive = 0
+            if {14, 2, 3}.issubset(set(sorted_ranks)): has_3_straight = True
+            
+            if has_3_straight:
+                final_multiplier *= 2
+                breakdown.append("Python(x2)")
+
+        # --- CONDITION TRIGGERS ---
         if joker.key == "inflation" and len(hand_list) <= 4:
             additive_mult += 12
             breakdown.append("Inflation(+12)")
-        if joker.key == "the_regular":
-            additive_mult += 4
-            breakdown.append("Regular(+4)")
+            
+        if joker.key == "heavy_hitter" and len(hand_list) == 5:
+            additive_mult += 10
+            breakdown.append("Heavy(+10)")
+
+        # --- CARD PROPERTY TRIGGERS ---
+        if joker.key == "diamond_geezer":
+            count = sum(1 for c in hand_list if c.suit == "Diamonds")
+            if count > 0:
+                bonus = count * 4
+                additive_mult += bonus
+                breakdown.append(f"Geezer(+{bonus})")
+                
+        if joker.key == "club_sandwich":
+            count = sum(1 for c in hand_list if c.suit == "Clubs")
+            if count > 0:
+                bonus = count * 20
+                bonus_points += bonus
+                breakdown.append(f"Club(+{bonus})")
+                
+        if joker.key == "face_value":
+            # Faces are strictly J(11), Q(12), K(13)
+            count = sum(1 for c in hand_list if c.value in [11, 12, 13])
+            if count > 0:
+                bonus = count * 4
+                additive_mult += bonus
+                breakdown.append(f"FaceVal(+{bonus})")
+        
+        if joker.key == "odd_todd":
+            # A(14), 3, 5, 7, 9
+            count = sum(1 for c in hand_list if c.value in [14, 3, 5, 7, 9])
+            if count > 0:
+                bonus = count * 30
+                bonus_points += bonus
+                breakdown.append(f"OddTodd(+{bonus})")
+                
+        if joker.key == "wishing_well":
+            # A(14), 2, 3
+            count = sum(1 for c in hand_list if c.value in [14, 2, 3])
+            if count > 0:
+                coin_bonus += count
+                breakdown.append(f"Wish(+${count})")
+
+        # --- STATE TRIGGERS ---
         if joker.key == "waste_management":
             wm_bonus = run_discards // 3
             if wm_bonus > 0:
                 additive_mult += wm_bonus
-                breakdown.append(f"WasteMan(+{wm_bonus})")
-        if joker.key == "diamond_geezer":
-            diamond_count = sum(1 for c in hand_list if c.suit == 'Diamonds')
-            if diamond_count > 0:
-                dg_bonus = diamond_count * 4
-                additive_mult += dg_bonus
-                breakdown.append(f"Geezer(+{dg_bonus})")
-        if joker.key == "wishing_well":
-            wish_hits = sum(1 for c in hand_list if c.value in [14, 2, 3]) 
-            if wish_hits > 0:
-                coin_bonus += wish_hits
-                breakdown.append(f"Wish(+${wish_hits})")
-    
-    # 4. Final Multipliers
-    for joker in joker_list:
-        if joker.key == "multi_python" and has_3_straight:
-            final_multiplier *= 2
-            breakdown.append("Python(x2)")
+                breakdown.append(f"Waste(+{wm_bonus})")
+                
+        if joker.key == "the_regular":
+            additive_mult += 4
+            breakdown.append("Regular(+4)")
+            
+        if joker.key == "potato_chip":
+            bonus_points += 50
+            breakdown.append("Potato(+50)")
+            
+        if joker.key == "lucky_clover":
+            if random.random() < 0.25:
+                additive_mult += 20
+                breakdown.append("Lucky(+20)")
 
     total_mult = additive_mult * final_multiplier
     total_base = base_sum + bonus_points
