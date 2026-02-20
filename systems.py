@@ -34,7 +34,7 @@ class AudioManager:
         if self.card_sound:
             # Randomize speed between 0.85 (slower/lower) and 1.2 (faster/higher)
             pitch_speed = random.uniform(0.85, 1.2)
-            self.card_sound.play(volume=0.6, speed=pitch_speed)
+            self.card_sound.play(volume=0.9, speed=pitch_speed)
 
     def start_bg_music(self):
         """ Hard start the background music, used at game boot """
