@@ -23,42 +23,61 @@ class AudioManager:
         self.store_player = None
         
         # Fading targets
-        self.base_volume = 0.5   # Maximum volume for music
+        self.base_volume = 0.5   
         self.bg_target_volume = self.base_volume
         self.store_target_volume = 0.0
         
-        self.fade_speed = 0.8    # How fast the volume changes per second
+        self.fade_speed = 0.8    
 
     def play_card_sound(self):
         """ Plays the card draw sound with a randomized pitch to avoid repetition """
         if self.card_sound:
-            # Randomize speed between 0.85 (slower/lower) and 1.2 (faster/higher)
             pitch_speed = random.uniform(0.85, 1.2)
-            self.card_sound.play(volume=0.9, speed=pitch_speed)
+            self.card_sound.play(volume=0.6, speed=pitch_speed)
 
     def start_bg_music(self):
         """ Hard start the background music, used at game boot """
         self.bg_target_volume = self.base_volume
         self.store_target_volume = 0.0
         
-        if self.bg_music and not self.bg_player:
+        if self.bg_music:
+            if self.bg_player:
+                try:
+                    self.bg_player.pause() # Stop any active track
+                except Exception:
+                    pass
             self.bg_player = self.bg_music.play(volume=self.bg_target_volume, loop=True)
 
     def enter_store(self):
-        """ Sets targets to fade OUT background and fade IN store """
+        """ Sets targets to fade OUT background and fade IN store from the beginning """
         self.bg_target_volume = 0.0
         self.store_target_volume = self.base_volume
         
-        if self.store_music and not self.store_player:
-            # Start at 0 volume, let update() fade it in naturally
+        if self.store_music:
+            # Stop the old, silent store track so it resets
+            if self.store_player:
+                try:
+                    self.store_player.pause()
+                except Exception:
+                    pass
+            
+            # Start a fresh instance from the beginning at 0 volume
             self.store_player = self.store_music.play(volume=0.0, loop=True)
 
     def exit_store(self):
-        """ Sets targets to fade OUT store and fade IN background """
+        """ Sets targets to fade OUT store and fade IN background from the beginning """
         self.store_target_volume = 0.0
         self.bg_target_volume = self.base_volume
         
-        if self.bg_music and not self.bg_player:
+        if self.bg_music:
+            # Stop the old, silent background track so it resets
+            if self.bg_player:
+                try:
+                    self.bg_player.pause()
+                except Exception:
+                    pass
+            
+            # Start a fresh instance from the beginning at 0 volume
             self.bg_player = self.bg_music.play(volume=0.0, loop=True)
 
     def update(self, delta_time):
@@ -71,7 +90,7 @@ class AudioManager:
                 elif self.bg_player.volume > self.bg_target_volume:
                     self.bg_player.volume = max(self.bg_target_volume, self.bg_player.volume - self.fade_speed * delta_time)
             except Exception:
-                pass # Safe catch for cross-platform Pyglet quirks
+                pass
 
         # Fade Store Music
         if self.store_player:
