@@ -60,7 +60,6 @@ COLOR_TOOLTIP_BG = (20, 20, 20, 230)
 
 # --- Joker Definitions (STRICTLY MATCHING ASSETS) ---
 JOKER_DATA = {
-    # -- Existing --
     "club_sandwich": {
         "name": "Club Sandwich", "cost": 6, "desc": "+20 Chips for each Club played", 
         "file": resource_path("assets/jokers/club_sandwich.jpg")
@@ -90,7 +89,7 @@ JOKER_DATA = {
         "file": resource_path("assets/jokers/multi_python.jpg")
     },
     "national_reserve": {
-        "name": "National Reserve", "cost": 6, "desc": "Earn $3 at end of round (No Discards)", 
+        "name": "National Reserve", "cost": 6, "desc": "+10 Chips for each card remaining in deck", 
         "file": resource_path("assets/jokers/national_reserve.jpg")
     },
     "odd_todd": {
@@ -106,12 +105,12 @@ JOKER_DATA = {
         "file": resource_path("assets/jokers/potato_chip.jpg")
     },
     "rainbow_trout": {
-        "name": "Rainbow Trout", "cost": 6, "desc": "+10 Mult if Flush", 
+        "name": "Rainbow Trout", "cost": 6, "desc": "x2 Mult if hand contains 4 different suits", 
         "file": resource_path("assets/jokers/rainbow_trout.jpg")
     },
     "mulligan": {
         "name": "The Mulligan", "cost": 5, "desc": "+1 Discard per Round", 
-        "file": resource_path("assets/jokers/the_muligan.jpg") # Note: 'muligan' 
+        "file": resource_path("assets/jokers/the_muligan.jpg") 
     },
     "the_regular": {
         "name": "The Regular", "cost": 4, "desc": "+4 Mult",

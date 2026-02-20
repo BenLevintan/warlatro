@@ -79,9 +79,7 @@ class WarGame(arcade.Window):
         self.run_discards = 0
         
         self.joker_list.clear()
-        
         self.deck_manager = systems.DeckManager()
-        
         self.start_new_round()
 
     def start_new_round(self):
@@ -230,8 +228,11 @@ class WarGame(arcade.Window):
         self.message = "Applied!"
 
     def score_hand(self):
+        # Calculate cards remaining in draw pile
+        cards_in_deck = len(self.deck_manager.draw_pile)
+        
         base, multi, desc, coin_bonus = scoring.calculate_hand_score(
-            self.hand_list, self.joker_list, self.run_discards
+            self.hand_list, self.joker_list, self.run_discards, cards_in_deck
         )
         final_score = base * multi
         self.score_total += final_score
@@ -425,8 +426,9 @@ class WarGame(arcade.Window):
                 self.btn_action.active = True
 
         if len(self.hand_list) > 0:
+            cards_in_deck = len(self.deck_manager.draw_pile)
             s, m, desc, coin_bonus = scoring.calculate_hand_score(
-                self.hand_list, self.joker_list, self.run_discards
+                self.hand_list, self.joker_list, self.run_discards, cards_in_deck
             )
             total = s * m
             self.btn_score.text = f"PLAY HAND\n{s} x {m} = {total}"
