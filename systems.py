@@ -4,6 +4,86 @@ import config
 import sprites
 import ui_elements
 
+class AudioManager:
+    """ Handles all sound effects and music cross-fading """
+    def __init__(self):
+        # Load sounds safely
+        try:
+            self.bg_music = arcade.Sound(config.MUSIC_BG)
+            self.store_music = arcade.Sound(config.MUSIC_STORE)
+            self.card_sound = arcade.Sound(config.SOUND_CARD)
+        except Exception as e:
+            print(f"Warning: Audio file missing or unreadable. {e}")
+            self.bg_music = None
+            self.store_music = None
+            self.card_sound = None
+
+        # Track active players so we can manipulate volume
+        self.bg_player = None
+        self.store_player = None
+        
+        # Fading targets
+        self.base_volume = 0.5   # Maximum volume for music
+        self.bg_target_volume = self.base_volume
+        self.store_target_volume = 0.0
+        
+        self.fade_speed = 0.8    # How fast the volume changes per second
+
+    def play_card_sound(self):
+        """ Plays the card draw sound with a randomized pitch to avoid repetition """
+        if self.card_sound:
+            # Randomize speed between 0.85 (slower/lower) and 1.2 (faster/higher)
+            pitch_speed = random.uniform(0.85, 1.2)
+            self.card_sound.play(volume=0.6, speed=pitch_speed)
+
+    def start_bg_music(self):
+        """ Hard start the background music, used at game boot """
+        self.bg_target_volume = self.base_volume
+        self.store_target_volume = 0.0
+        
+        if self.bg_music and not self.bg_player:
+            self.bg_player = self.bg_music.play(volume=self.bg_target_volume, loop=True)
+
+    def enter_store(self):
+        """ Sets targets to fade OUT background and fade IN store """
+        self.bg_target_volume = 0.0
+        self.store_target_volume = self.base_volume
+        
+        if self.store_music and not self.store_player:
+            # Start at 0 volume, let update() fade it in naturally
+            self.store_player = self.store_music.play(volume=0.0, loop=True)
+
+    def exit_store(self):
+        """ Sets targets to fade OUT store and fade IN background """
+        self.store_target_volume = 0.0
+        self.bg_target_volume = self.base_volume
+        
+        if self.bg_music and not self.bg_player:
+            self.bg_player = self.bg_music.play(volume=0.0, loop=True)
+
+    def update(self, delta_time):
+        """ Called every frame to gradually adjust volumes toward targets """
+        # Fade Background Music
+        if self.bg_player:
+            try:
+                if self.bg_player.volume < self.bg_target_volume:
+                    self.bg_player.volume = min(self.bg_target_volume, self.bg_player.volume + self.fade_speed * delta_time)
+                elif self.bg_player.volume > self.bg_target_volume:
+                    self.bg_player.volume = max(self.bg_target_volume, self.bg_player.volume - self.fade_speed * delta_time)
+            except Exception:
+                pass # Safe catch for cross-platform Pyglet quirks
+
+        # Fade Store Music
+        if self.store_player:
+            try:
+                if self.store_player.volume < self.store_target_volume:
+                    self.store_player.volume = min(self.store_target_volume, self.store_player.volume + self.fade_speed * delta_time)
+                elif self.store_player.volume > self.store_target_volume:
+                    self.store_player.volume = max(self.store_target_volume, self.store_player.volume - self.fade_speed * delta_time)
+            except Exception:
+                pass
+
+
 class DeckManager:
     """ Handles the Master Deck, Draw Pile, and Discard Pile logic """
     def __init__(self):
@@ -47,7 +127,7 @@ class DeckManager:
         if len(self.draw_pile) > 0:
             card = self.draw_pile.pop()
             card.visible = True
-            card.should_despawn = False # Logic Fix: Ensure physics are active
+            card.should_despawn = False 
             return card
         return None
 
@@ -57,7 +137,7 @@ class DeckManager:
         random.shuffle(self.draw_pile)
         
         for card in self.draw_pile:
-            card.should_despawn = False # Logic Fix: Ensure physics are active
+            card.should_despawn = False 
             card.visible = False
             card.center_x = config.SCREEN_WIDTH + 200
             if card not in visual_card_list:
