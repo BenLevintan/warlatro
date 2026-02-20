@@ -51,7 +51,7 @@ class AudioManager:
     def enter_store(self):
         """ Sets targets to fade OUT background and fade IN store from the beginning """
         self.bg_target_volume = 0.0
-        self.store_target_volume = self.base_volume
+        self.store_target_volume = 0.2
         
         if self.store_music:
             # Stop the old, silent store track so it resets
