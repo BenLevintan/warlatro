@@ -280,8 +280,11 @@ class WarGame(arcade.Window):
             return
 
         self.hands_played += 1
+        
+        # --- UPDATE THIS BLOCK HERE ---
         if self.hands_played >= self.hands_max:
             self.state = GameState.GAME_OVER
+            self.audio_manager.enter_game_over() # Trigger the fade to Game Over track
         else:
             self.message = f"Scored {final_score}! ({base} x {multi})"
             if coin_bonus > 0:
