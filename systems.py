@@ -4,6 +4,119 @@ import config
 import sprites
 import ui_elements
 
+class AudioManager:
+    """ Handles all sound effects and music cross-fading """
+    def __init__(self):
+        # Load sounds safely
+        try:
+            self.bg_music = arcade.Sound(config.MUSIC_BG)
+            self.store_music = arcade.Sound(config.MUSIC_STORE)
+            self.game_over_music = arcade.Sound(config.MUSIC_GAME_OVER) # NEW
+            self.card_sound = arcade.Sound(config.SOUND_CARD)
+        except Exception as e:
+            print(f"Warning: Audio file missing or unreadable. {e}")
+            self.bg_music = None
+            self.store_music = None
+            self.game_over_music = None
+            self.card_sound = None
+
+        # Track active players so we can manipulate volume
+        self.bg_player = None
+        self.store_player = None
+        self.game_over_player = None # NEW
+        
+        # Fading targets
+        self.base_volume = 0.5   
+        self.bg_target_volume = self.base_volume
+        self.store_target_volume = 0.0
+        self.game_over_target_volume = 0.0 # NEW
+        
+        self.fade_speed = 0.8    
+
+    def play_card_sound(self):
+        """ Plays the card draw sound with a randomized pitch """
+        if self.card_sound:
+            pitch_speed = random.uniform(0.85, 1.2)
+            self.card_sound.play(volume=0.6, speed=pitch_speed)
+
+    def start_bg_music(self):
+        """ Hard start the background music, used at game boot and restarts """
+        self.bg_target_volume = self.base_volume
+        self.store_target_volume = 0.0
+        self.game_over_target_volume = 0.0
+        
+        if self.bg_music:
+            if self.bg_player:
+                try:
+                    self.bg_player.pause()
+                except Exception:
+                    pass
+            self.bg_player = self.bg_music.play(volume=0.0, loop=True)
+
+    def enter_store(self):
+        self.bg_target_volume = 0.0
+        self.store_target_volume = self.base_volume
+        self.game_over_target_volume = 0.0
+        
+        if self.store_music:
+            if self.store_player:
+                try:
+                    self.store_player.pause()
+                except Exception:
+                    pass
+            self.store_player = self.store_music.play(volume=0.0, loop=True)
+
+    def exit_store(self):
+        # We can just reuse start_bg_music to handle fading back to the main track
+        self.start_bg_music()
+
+    def enter_game_over(self):
+        """ Fade out everything else, fade in Game Over music """
+        self.bg_target_volume = 0.0
+        self.store_target_volume = 0.0
+        self.game_over_target_volume = self.base_volume
+        
+        if self.game_over_music:
+            if self.game_over_player:
+                try:
+                    self.game_over_player.pause()
+                except Exception:
+                    pass
+            self.game_over_player = self.game_over_music.play(volume=0.0, loop=True)
+
+    def update(self, delta_time):
+        """ Called every frame to gradually adjust volumes toward targets """
+        # Fade Background
+        if self.bg_player:
+            try:
+                if self.bg_player.volume < self.bg_target_volume:
+                    self.bg_player.volume = min(self.bg_target_volume, self.bg_player.volume + self.fade_speed * delta_time)
+                elif self.bg_player.volume > self.bg_target_volume:
+                    self.bg_player.volume = max(self.bg_target_volume, self.bg_player.volume - self.fade_speed * delta_time)
+            except Exception:
+                pass
+
+        # Fade Store
+        if self.store_player:
+            try:
+                if self.store_player.volume < self.store_target_volume:
+                    self.store_player.volume = min(self.store_target_volume, self.store_player.volume + self.fade_speed * delta_time)
+                elif self.store_player.volume > self.store_target_volume:
+                    self.store_player.volume = max(self.store_target_volume, self.store_player.volume - self.fade_speed * delta_time)
+            except Exception:
+                pass
+
+        # Fade Game Over
+        if self.game_over_player:
+            try:
+                if self.game_over_player.volume < self.game_over_target_volume:
+                    self.game_over_player.volume = min(self.game_over_target_volume, self.game_over_player.volume + self.fade_speed * delta_time)
+                elif self.game_over_player.volume > self.game_over_target_volume:
+                    self.game_over_player.volume = max(self.game_over_target_volume, self.game_over_player.volume - self.fade_speed * delta_time)
+            except Exception:
+                pass
+
+
 class DeckManager:
     """ Handles the Master Deck, Draw Pile, and Discard Pile logic """
     def __init__(self):
@@ -47,7 +160,7 @@ class DeckManager:
         if len(self.draw_pile) > 0:
             card = self.draw_pile.pop()
             card.visible = True
-            card.should_despawn = False # Logic Fix: Ensure physics are active
+            card.should_despawn = False 
             return card
         return None
 
@@ -57,7 +170,7 @@ class DeckManager:
         random.shuffle(self.draw_pile)
         
         for card in self.draw_pile:
-            card.should_despawn = False # Logic Fix: Ensure physics are active
+            card.should_despawn = False 
             card.visible = False
             card.center_x = config.SCREEN_WIDTH + 200
             if card not in visual_card_list:

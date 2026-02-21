@@ -22,6 +22,7 @@ class WarGame(arcade.Window):
         # Managers
         self.deck_manager = None
         self.shop_manager = systems.ShopManager()
+        self.audio_manager = systems.AudioManager() # NEW: Setup Audio
 
         # Sprite Lists
         self.card_list = arcade.SpriteList()
@@ -80,6 +81,9 @@ class WarGame(arcade.Window):
         
         self.joker_list.clear()
         self.deck_manager = systems.DeckManager()
+        
+        self.audio_manager.start_bg_music() # NEW: Start Music
+        
         self.start_new_round()
 
     def start_new_round(self):
@@ -89,6 +93,9 @@ class WarGame(arcade.Window):
         self.shop_list.clear()
         self.pack_card_list.clear()
         self.shop_buttons = []
+        
+        # Crossfade music back to standard BG (in case we just left the shop)
+        self.audio_manager.exit_store() 
         
         # --- JOKER LOGIC (Start Round) ---
         bonus_hands = sum(1 for j in self.joker_list if j.key == "helping_hand")
@@ -115,6 +122,9 @@ class WarGame(arcade.Window):
         card = self.deck_manager.draw_card(self.card_list)
         
         if card:
+            # --- NEW: Play card drawing sound! ---
+            self.audio_manager.play_card_sound()
+            
             start_x = config.SCREEN_WIDTH + 150
             start_y = config.DRAWN_CARD_Y
             card._phys_x = start_x
@@ -133,11 +143,28 @@ class WarGame(arcade.Window):
         self.state = GameState.SHOPPING
         self.message = "SHOP PHASE"
         
+        # NEW: Fade into the store music!
+        self.audio_manager.enter_store()
+        
         # Standard Reward
         hands_left = max(0, self.hands_max - self.hands_played)
         reward = (hands_left * 2) + (self.discards_left * 1)
         self.coins += reward
+        
+        # --- National Reserve Bonus ---
+        bonus_discards = sum(1 for j in self.joker_list if j.key == "mulligan")
+        start_discards = config.MAX_DISCARDS + bonus_discards
+        
+        nr_bonus = 0
+        if self.discards_left == start_discards:
+            nr_count = sum(1 for j in self.joker_list if j.key == "national_reserve")
+            if nr_count > 0:
+                nr_bonus = nr_count * 3
+                self.coins += nr_bonus
+
         self.message = f"Round Cleared!\nEarned ${reward}."
+        if nr_bonus > 0:
+            self.message += f"\n(Reserve Bonus +${nr_bonus})"
 
         self.shop_manager.generate_shop(self.shop_list, self.shop_buttons, self.joker_list)
         
@@ -253,8 +280,11 @@ class WarGame(arcade.Window):
             return
 
         self.hands_played += 1
+        
+        # --- UPDATE THIS BLOCK HERE ---
         if self.hands_played >= self.hands_max:
             self.state = GameState.GAME_OVER
+            self.audio_manager.enter_game_over() # Trigger the fade to Game Over track
         else:
             self.message = f"Scored {final_score}! ({base} x {multi})"
             if coin_bonus > 0:
@@ -284,6 +314,10 @@ class WarGame(arcade.Window):
 
     def on_update(self, delta_time):
         self.shader_time += delta_time
+        
+        # --- NEW: Process Audio Fades ---
+        self.audio_manager.update(delta_time)
+        
         self.card_list.update()
         self.joker_list.update()
         self.shop_list.update()
