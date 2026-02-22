@@ -11,27 +11,34 @@ class AudioManager:
         try:
             self.bg_music = arcade.Sound(config.MUSIC_BG)
             self.store_music = arcade.Sound(config.MUSIC_STORE)
-            self.game_over_music = arcade.Sound(config.MUSIC_GAME_OVER) # NEW
+            self.game_over_music = arcade.Sound(config.MUSIC_GAME_OVER)
             self.card_sound = arcade.Sound(config.SOUND_CARD)
+            self.play_hand_sound = arcade.Sound(config.SOUND_PLAY_HAND) # <--- ADD THIS LINE
         except Exception as e:
             print(f"Warning: Audio file missing or unreadable. {e}")
             self.bg_music = None
             self.store_music = None
             self.game_over_music = None
             self.card_sound = None
+            self.play_hand_sound = None # <--- ADD THIS LINE
 
         # Track active players so we can manipulate volume
         self.bg_player = None
         self.store_player = None
-        self.game_over_player = None # NEW
+        self.game_over_player = None
         
         # Fading targets
         self.base_volume = 0.5   
         self.bg_target_volume = self.base_volume
         self.store_target_volume = 0.0
-        self.game_over_target_volume = 0.0 # NEW
+        self.game_over_target_volume = 0.0
         
         self.fade_speed = 0.8    
+
+    def play_hand_fx(self):
+        """ Plays the sound effect when the player presses 'Score Hand' """
+        if self.play_hand_sound:
+            self.play_hand_sound.play(volume=0.8) 
 
     def play_card_sound(self):
         """ Plays the card draw sound with a randomized pitch """

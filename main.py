@@ -255,7 +255,8 @@ class WarGame(arcade.Window):
         self.message = "Applied!"
 
     def score_hand(self):
-        # Calculate cards remaining in draw pile
+        self.audio_manager.play_hand_fx()
+
         cards_in_deck = len(self.deck_manager.draw_pile)
         
         base, multi, desc, coin_bonus = scoring.calculate_hand_score(

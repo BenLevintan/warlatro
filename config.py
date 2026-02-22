@@ -142,8 +142,9 @@ PACK_FILE = ":resources:images/items/gemRed.png"
 # --- AUDIO FILES ---
 MUSIC_BG = resource_path("assets/music/background_1.mp3")
 MUSIC_STORE = resource_path("assets/music/store_1.mp3")
-MUSIC_GAME_OVER = resource_path("assets/music/game_over.mp3") # NEW TRACK
+MUSIC_GAME_OVER = resource_path("assets/music/game_over.mp3")
 SOUND_CARD = resource_path("assets/music/card.mp3")
+SOUND_PLAY_HAND = resource_path("assets/music/play_hand.mp3")
 
 # --- Shaders ---
 VERTEX_SHADER = """
