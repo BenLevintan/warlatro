@@ -13,14 +13,18 @@ class AudioManager:
             self.store_music = arcade.Sound(config.MUSIC_STORE)
             self.game_over_music = arcade.Sound(config.MUSIC_GAME_OVER)
             self.card_sound = arcade.Sound(config.SOUND_CARD)
-            self.play_hand_sound = arcade.Sound(config.SOUND_PLAY_HAND) # <--- ADD THIS LINE
+            self.play_hand_sound = arcade.Sound(config.SOUND_PLAY_HAND)
+            self.buy_joker_sound = arcade.Sound(config.SOUND_BUY_JOKER) # NEW
+            self.mod_sound = arcade.Sound(config.SOUND_MOD)             # NEW
         except Exception as e:
             print(f"Warning: Audio file missing or unreadable. {e}")
             self.bg_music = None
             self.store_music = None
             self.game_over_music = None
             self.card_sound = None
-            self.play_hand_sound = None # <--- ADD THIS LINE
+            self.play_hand_sound = None
+            self.buy_joker_sound = None
+            self.mod_sound = None
 
         # Track active players so we can manipulate volume
         self.bg_player = None
@@ -35,29 +39,34 @@ class AudioManager:
         
         self.fade_speed = 0.8    
 
-    def play_hand_fx(self):
-        """ Plays the sound effect when the player presses 'Score Hand' """
-        if self.play_hand_sound:
-            self.play_hand_sound.play(volume=0.8) 
-
     def play_card_sound(self):
-        """ Plays the card draw sound with a randomized pitch """
         if self.card_sound:
             pitch_speed = random.uniform(0.85, 1.2)
             self.card_sound.play(volume=0.6, speed=pitch_speed)
 
+    def play_hand_fx(self):
+        if self.play_hand_sound:
+            self.play_hand_sound.play(volume=0.8) 
+
+    # --- NEW SOUND METHODS ---
+    def play_buy_joker_fx(self):
+        if self.buy_joker_sound:
+            self.buy_joker_sound.play(volume=0.8)
+            
+    def play_mod_fx(self):
+        if self.mod_sound:
+            self.mod_sound.play(volume=1)
+
+    # --- MUSIC FADING ---
     def start_bg_music(self):
-        """ Hard start the background music, used at game boot and restarts """
         self.bg_target_volume = self.base_volume
         self.store_target_volume = 0.0
         self.game_over_target_volume = 0.0
         
         if self.bg_music:
             if self.bg_player:
-                try:
-                    self.bg_player.pause()
-                except Exception:
-                    pass
+                try: self.bg_player.pause()
+                except Exception: pass
             self.bg_player = self.bg_music.play(volume=0.0, loop=True)
 
     def enter_store(self):
@@ -67,65 +76,50 @@ class AudioManager:
         
         if self.store_music:
             if self.store_player:
-                try:
-                    self.store_player.pause()
-                except Exception:
-                    pass
+                try: self.store_player.pause()
+                except Exception: pass
             self.store_player = self.store_music.play(volume=0.0, loop=True)
 
     def exit_store(self):
-        # We can just reuse start_bg_music to handle fading back to the main track
         self.start_bg_music()
 
     def enter_game_over(self):
-        """ Fade out everything else, fade in Game Over music """
         self.bg_target_volume = 0.0
         self.store_target_volume = 0.0
         self.game_over_target_volume = self.base_volume
         
         if self.game_over_music:
             if self.game_over_player:
-                try:
-                    self.game_over_player.pause()
-                except Exception:
-                    pass
+                try: self.game_over_player.pause()
+                except Exception: pass
             self.game_over_player = self.game_over_music.play(volume=0.0, loop=True)
 
     def update(self, delta_time):
-        """ Called every frame to gradually adjust volumes toward targets """
-        # Fade Background
         if self.bg_player:
             try:
                 if self.bg_player.volume < self.bg_target_volume:
                     self.bg_player.volume = min(self.bg_target_volume, self.bg_player.volume + self.fade_speed * delta_time)
                 elif self.bg_player.volume > self.bg_target_volume:
                     self.bg_player.volume = max(self.bg_target_volume, self.bg_player.volume - self.fade_speed * delta_time)
-            except Exception:
-                pass
+            except Exception: pass
 
-        # Fade Store
         if self.store_player:
             try:
                 if self.store_player.volume < self.store_target_volume:
                     self.store_player.volume = min(self.store_target_volume, self.store_player.volume + self.fade_speed * delta_time)
                 elif self.store_player.volume > self.store_target_volume:
                     self.store_player.volume = max(self.store_target_volume, self.store_player.volume - self.fade_speed * delta_time)
-            except Exception:
-                pass
+            except Exception: pass
 
-        # Fade Game Over
         if self.game_over_player:
             try:
                 if self.game_over_player.volume < self.game_over_target_volume:
                     self.game_over_player.volume = min(self.game_over_target_volume, self.game_over_player.volume + self.fade_speed * delta_time)
                 elif self.game_over_player.volume > self.game_over_target_volume:
                     self.game_over_player.volume = max(self.game_over_target_volume, self.game_over_player.volume - self.fade_speed * delta_time)
-            except Exception:
-                pass
-
+            except Exception: pass
 
 class DeckManager:
-    """ Handles the Master Deck, Draw Pile, and Discard Pile logic """
     def __init__(self):
         self.master_deck = []
         self.draw_pile = []
@@ -141,12 +135,10 @@ class DeckManager:
                 self.master_deck.append(card)
 
     def start_round(self, visual_card_list):
-        """ Resets piles for a new round and repopulates the visual sprite list """
         self.draw_pile = [c for c in self.master_deck if c.modifier != "destroy"]
         self.discard_pile = []
         random.shuffle(self.draw_pile)
         
-        # Add to Arcade's visual list but keep hidden off-screen
         for card in self.draw_pile:
             card.should_despawn = False
             card.visible = False
@@ -158,12 +150,9 @@ class DeckManager:
                 visual_card_list.append(card)
 
     def draw_card(self, visual_card_list):
-        """ Draws one card. Automatically handles recycling discards if empty. """
-        # 1. Check if we need to recycle
         if len(self.draw_pile) == 0 and len(self.discard_pile) > 0:
             self._recycle_discards(visual_card_list)
 
-        # 2. Try to draw
         if len(self.draw_pile) > 0:
             card = self.draw_pile.pop()
             card.visible = True
@@ -184,19 +173,15 @@ class DeckManager:
                 visual_card_list.append(card)
     
     def get_deck_counts(self):
-        """ Returns (current_cards, total_valid_cards) """
         total = len([c for c in self.master_deck if c.modifier != "destroy"])
         current = len(self.draw_pile) + len(self.discard_pile)
         return current, total
 
 class ShopManager:
-    """ Handles generating shop items and Pack cards """
-    
     def generate_shop(self, shop_list, shop_buttons, current_jokers):
         shop_list.clear()
         shop_buttons.clear()
         
-        # 1. Determine Slots (Pack, Joker, Random)
         slots = ['Pack', 'Joker']
         slots.append(random.choice(['Pack', 'Joker']))
         
@@ -232,12 +217,10 @@ class ShopManager:
                 shop_buttons.append(btn)
 
     def get_pack_cards(self, master_deck):
-        """ Selects 8 random valid cards for the pack opening screen """
         available = [c for c in master_deck if c.modifier != "destroy"]
         num = min(8, len(available))
         return random.sample(available, num)
 
     def get_pack_modifiers(self):
-        """ Returns 2 random modifier keys """
         keys = list(config.MODIFIER_DATA.keys())
         return random.sample(keys, 2)
