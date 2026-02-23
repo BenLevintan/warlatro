@@ -1,6 +1,9 @@
 import arcade
 import arcade.gl
 import enum
+import warnings
+
+warnings.filterwarnings("ignore") 
 
 import config
 import sprites
@@ -19,20 +22,18 @@ class WarGame(arcade.Window):
     def __init__(self):
         super().__init__(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.SCREEN_TITLE)
         
-        # Managers
         self.deck_manager = None
         self.shop_manager = systems.ShopManager()
-        self.audio_manager = systems.AudioManager() # NEW: Setup Audio
+        self.audio_manager = systems.AudioManager() 
 
-        # Sprite Lists
         self.card_list = arcade.SpriteList()
         self.hand_list = arcade.SpriteList()
         self.joker_list = arcade.SpriteList()
         self.shop_list = arcade.SpriteList()
         self.pack_card_list = arcade.SpriteList()
+        self.animating_cards = arcade.SpriteList() # NEW: Keeps tracking cards after shop is closed
         self.drawn_card = None
         
-        # Game State
         self.state = GameState.DRAWING
         self.score_total = 0
         self.hands_played = 0
@@ -46,14 +47,12 @@ class WarGame(arcade.Window):
         self.message = ""
         self.hand_details = [] 
         
-        # Buttons
         self.btn_action = None 
         self.btn_score = None
         self.btn_next_round = None
         self.btn_sell = None
         self.shop_buttons = []
         
-        # Pack Buttons
         self.btn_pack_skip = None
         self.btn_pack_mods = [] 
         self.pack_modifiers_offered = [] 
@@ -64,7 +63,6 @@ class WarGame(arcade.Window):
         
         self.background_color = config.COLOR_BG
 
-        # --- SHADER SETUP ---
         self.shader_time = 0.0 
         self.program = self.ctx.program(vertex_shader=config.VERTEX_SHADER, fragment_shader=config.FRAGMENT_SHADER)
         self.quad_fs = arcade.gl.geometry.quad_2d_fs()
@@ -72,7 +70,6 @@ class WarGame(arcade.Window):
         self.fbo = self.ctx.framebuffer(color_attachments=[self.screen_texture])
 
     def setup(self):
-        """ Completely resets the game state for a new run """
         self.score_total = 0
         self.round_level = 1
         self.target_score = config.BASE_TARGET_SCORE
@@ -80,9 +77,10 @@ class WarGame(arcade.Window):
         self.run_discards = 0
         
         self.joker_list.clear()
+        self.animating_cards.clear()
         self.deck_manager = systems.DeckManager()
         
-        self.audio_manager.start_bg_music() # NEW: Start Music
+        self.audio_manager.start_bg_music() 
         
         self.start_new_round()
 
@@ -94,10 +92,8 @@ class WarGame(arcade.Window):
         self.pack_card_list.clear()
         self.shop_buttons = []
         
-        # Crossfade music back to standard BG (in case we just left the shop)
         self.audio_manager.exit_store() 
         
-        # --- JOKER LOGIC (Start Round) ---
         bonus_hands = sum(1 for j in self.joker_list if j.key == "helping_hand")
         bonus_discards = sum(1 for j in self.joker_list if j.key == "mulligan")
         
@@ -122,7 +118,6 @@ class WarGame(arcade.Window):
         card = self.deck_manager.draw_card(self.card_list)
         
         if card:
-            # --- NEW: Play card drawing sound! ---
             self.audio_manager.play_card_sound()
             
             start_x = config.SCREEN_WIDTH + 150
@@ -143,15 +138,12 @@ class WarGame(arcade.Window):
         self.state = GameState.SHOPPING
         self.message = "SHOP PHASE"
         
-        # NEW: Fade into the store music!
         self.audio_manager.enter_store()
         
-        # Standard Reward
         hands_left = max(0, self.hands_max - self.hands_played)
         reward = (hands_left * 2) + (self.discards_left * 1)
         self.coins += reward
         
-        # --- National Reserve Bonus ---
         bonus_discards = sum(1 for j in self.joker_list if j.key == "mulligan")
         start_discards = config.MAX_DISCARDS + bonus_discards
         
@@ -195,6 +187,8 @@ class WarGame(arcade.Window):
                     self.reposition_jokers() 
                     self.shop_buttons.pop(index)
                     self.update_shop_buttons()
+                    
+                    self.audio_manager.play_buy_joker_fx() # NEW SOUND
                 else:
                     self.message = "Inventory Full!"
             
@@ -209,6 +203,8 @@ class WarGame(arcade.Window):
         self.message = "Select Cards then Choose Modifier"
         self.pack_card_list.clear()
         self.btn_pack_mods = []
+        
+        self.audio_manager.play_mod_fx() # NEW SOUND: When cards are pulled
         
         chosen_cards = self.shop_manager.get_pack_cards(self.deck_manager.master_deck)
         
@@ -247,15 +243,30 @@ class WarGame(arcade.Window):
             return
             
         mod_key = self.pack_modifiers_offered[mod_index]
+        self.audio_manager.play_mod_fx() # NEW SOUND: When applied
+        
         for card in selected:
             card.modifier = mod_key
+            card.is_selected = False
+            
+            # --- NEW ANIMATION LOGIC ---
+            if mod_key == "destroy":
+                card.is_spasming = True
+            else:
+                # Tell it to fly up and off screen
+                card.target_y = config.SCREEN_HEIGHT + 400
+                card.should_despawn = True
+            
+            # Move card out of the static UI list into our dynamic animation list
+            self.animating_cards.append(card)
             
         self.state = GameState.SHOPPING
-        self.pack_card_list.clear() 
+        self.pack_card_list.clear() # Clears remaining unselected cards immediately
         self.message = "Applied!"
 
     def score_hand(self):
-        # Calculate cards remaining in draw pile
+        self.audio_manager.play_hand_fx()
+        
         cards_in_deck = len(self.deck_manager.draw_pile)
         
         base, multi, desc, coin_bonus = scoring.calculate_hand_score(
@@ -280,11 +291,9 @@ class WarGame(arcade.Window):
             return
 
         self.hands_played += 1
-        
-        # --- UPDATE THIS BLOCK HERE ---
         if self.hands_played >= self.hands_max:
             self.state = GameState.GAME_OVER
-            self.audio_manager.enter_game_over() # Trigger the fade to Game Over track
+            self.audio_manager.enter_game_over() 
         else:
             self.message = f"Scored {final_score}! ({base} x {multi})"
             if coin_bonus > 0:
@@ -315,12 +324,12 @@ class WarGame(arcade.Window):
     def on_update(self, delta_time):
         self.shader_time += delta_time
         
-        # --- NEW: Process Audio Fades ---
         self.audio_manager.update(delta_time)
         
         self.card_list.update()
         self.joker_list.update()
         self.shop_list.update()
+        self.animating_cards.update() # NEW: Keeps updating modified cards
         if self.state == GameState.PACK_OPENING:
             self.pack_card_list.update()
         
@@ -328,10 +337,8 @@ class WarGame(arcade.Window):
             card.visible = True
 
     def draw_game_contents(self):
-        # Backgrounds
         arcade.draw_rect_filled(arcade.XYWH(config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT - 40, config.SCREEN_WIDTH, 80), config.COLOR_UI_BG)
         
-        # Stats
         arcade.draw_text(f"Lvl: {self.round_level}", 20, config.SCREEN_HEIGHT - 50, config.COLOR_WHITE, 16)
         arcade.draw_text(f"Target: {self.score_total} / {self.target_score}", 150, config.SCREEN_HEIGHT - 50, config.COLOR_WHITE, 20, bold=True)
         arcade.draw_text(f"Coins: ${self.coins}", config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT - 50, config.COLOR_GOLD, 20, bold=True, anchor_x="center")
@@ -341,7 +348,6 @@ class WarGame(arcade.Window):
              color_disc = config.COLOR_BTN_ACTION if self.discards_left > 0 else config.COLOR_RED
              arcade.draw_text(f"Discards: {self.discards_left}", config.SCREEN_WIDTH - 250, config.SCREEN_HEIGHT - 65, color_disc, 16, anchor_x="right")
 
-        # Game Area
         if self.state == GameState.SHOPPING:
             arcade.draw_text(self.message, config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT - 150, config.COLOR_WHITE, 20, anchor_x="center", align="center")
             ui_elements.draw_shadows(self.shop_list)
@@ -368,7 +374,7 @@ class WarGame(arcade.Window):
             arcade.draw_text(f"Final Score: {self.score_total}", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2, config.COLOR_WHITE, 20, anchor_x="center")
             arcade.draw_text("Click to Restart", config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2 - 60, (150, 150, 150), 16, anchor_x="center")
 
-        else: # Playing
+        else: 
             if self.message:
                 arcade.draw_text(self.message, config.SCREEN_WIDTH/2, 380, config.COLOR_WHITE, 16, anchor_x="center", align="center")
             
@@ -419,6 +425,12 @@ class WarGame(arcade.Window):
                 self.btn_sell.draw()
 
         ui_elements.draw_tooltip(self.hovered_joker, self.mouse_x, self.mouse_y)
+        
+        # --- NEW: Draw Animating Pack Cards ON TOP ---
+        ui_elements.draw_shadows(self.animating_cards)
+        self.animating_cards.draw()
+        for card in self.animating_cards:
+            card.draw_modifier()
 
     def on_draw(self):
         self.fbo.use()
