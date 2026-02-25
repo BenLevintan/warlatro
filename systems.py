@@ -34,8 +34,8 @@ class AudioManager:
         # Fading targets
         self.base_volume = 0.5   
         self.bg_target_volume = self.base_volume
-        self.store_target_volume = 0.0
-        self.game_over_target_volume = 0.0
+        self.store_target_volume = 0.5
+        self.game_over_target_volume = 0.5
         
         self.fade_speed = 0.8    
 
