@@ -98,7 +98,7 @@ def calculate_hand_score(hand_list, joker_list, run_discards, cards_in_deck):
     for joker in joker_list:
         
         # --- HAND TYPE TRIGGERS ---
-        if joker.key == "pear_up" and "Pair" in hand_type: # Matches Pair, Two Pair
+        if joker.key == "pear_up" and hand_type in ("Pair", "Two Pair", "Full House" ,"3 of a Kind", "4 of a Kind"):
             additive_mult += 8
             breakdown.append("Pear(+8)")
             
@@ -106,7 +106,7 @@ def calculate_hand_score(hand_list, joker_list, run_discards, cards_in_deck):
             additive_mult += 12
             breakdown.append("TripTrt(+12)")
             
-        if joker.key == "double_trouble" and hand_type == "Two Pair":
+        if joker.key == "double_trouble" and hand_type in ("Two Pair", "Full House"):
             final_multiplier *= 2
             breakdown.append("DblTrbl(x2)")
 

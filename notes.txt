@@ -1,1 +1,5 @@
 2 pair joker effect doesn't work on full house
+
+tried to make the following fixes - check if they work:
+[] pear up now should work also with 3 and 4 of a kind - use to work just with pair and 2 pairs 
+[] duonle trouble should now work with full house too

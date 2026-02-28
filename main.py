@@ -447,7 +447,17 @@ class WarGame(arcade.Window):
         
         self.screen_texture.use(0)
         self.quad_fs.render(self.program)
-
+    
+        # --- Draw FPS on top (after shader) ---
+        fps = arcade.get_fps()
+        arcade.draw_text(
+            f"FPS: {fps:.1f}",
+            15,
+            15,
+            arcade.color.WHITE,
+            14
+        )
+        
     def update_game_buttons(self):
         if self.state == GameState.GAME_OVER:
             self.btn_action.visible = False
@@ -610,10 +620,12 @@ class WarGame(arcade.Window):
         if self.state == GameState.SHOPPING:
             self.update_shop_buttons()
 
+
 def main():
     window = WarGame()
     window.setup()
     arcade.run()
+
 
 if __name__ == "__main__":
     main()

@@ -45,6 +45,7 @@ class TextButton:
     def is_clicked(self, x, y):
         return self.visible and self.active and self.is_hovered
 
+
 def get_rotated_points(cx, cy, w, h, angle_deg):
     """ Helper to calculate the 4 corners of a rotated rectangle """
     angle_rad = math.radians(angle_deg)
@@ -73,6 +74,7 @@ def get_rotated_points(cx, cy, w, h, angle_deg):
         
     return rotated_points
 
+
 def draw_shadows(sprite_list):
     """ Draws a drop shadow for every sprite, accounting for rotation and scale """
     for sprite in sprite_list:
@@ -99,6 +101,7 @@ def draw_shadows(sprite_list):
         )
 
         arcade.draw_polygon_filled(points, config.COLOR_SHADOW)
+
 
 def draw_tooltip(hovered_joker, mouse_x, mouse_y):
     if not hovered_joker:
