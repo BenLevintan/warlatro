@@ -94,9 +94,7 @@ class Card(arcade.Sprite):
     def update(self, delta_time: float = 1/60):
         self.timer += delta_time
         
-        # --- NEW: Destroyed Card Spasm Logic ---
         if self.is_spasming:
-            # Vibrate wildly around its physical anchor
             self.center_x = self._phys_x + random.uniform(-15, 15)
             self.center_y = self._phys_y + random.uniform(-15, 15)
             # Fade out
@@ -104,8 +102,8 @@ class Card(arcade.Sprite):
             if self.alpha <= 0:
                 self.remove_from_sprite_lists()
                 self.is_spasming = False
-                self.alpha = 255 # Reset in case it gets recycled next run
-            return # Skip normal movement
+                self.alpha = 255
+            return 
 
         dx = self.target_x - self._phys_x
         dy = self.target_y - self._phys_y
