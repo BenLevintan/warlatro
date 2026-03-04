@@ -14,8 +14,8 @@ class AudioManager:
             self.game_over_music = arcade.Sound(config.MUSIC_GAME_OVER)
             self.card_sound = arcade.Sound(config.SOUND_CARD)
             self.play_hand_sound = arcade.Sound(config.SOUND_PLAY_HAND)
-            self.buy_joker_sound = arcade.Sound(config.SOUND_BUY_JOKER) # NEW
-            self.mod_sound = arcade.Sound(config.SOUND_MOD)             # NEW
+            self.buy_joker_sound = arcade.Sound(config.SOUND_BUY_JOKER) 
+            self.mod_sound = arcade.Sound(config.SOUND_MOD)             
         except Exception as e:
             print(f"Warning: Audio file missing or unreadable. {e}")
             self.bg_music = None
@@ -120,6 +120,7 @@ class AudioManager:
             except Exception: pass
 
 class DeckManager:
+    """ Handles the Master Deck, Draw Pile, and Discard Pile logic """
     def __init__(self):
         self.master_deck = []
         self.draw_pile = []
@@ -135,10 +136,12 @@ class DeckManager:
                 self.master_deck.append(card)
 
     def start_round(self, visual_card_list):
+        """ Resets piles for a new round and repopulates the visual sprite list """
         self.draw_pile = [c for c in self.master_deck if c.modifier != "destroy"]
         self.discard_pile = []
         random.shuffle(self.draw_pile)
         
+        # Add to Arcade's visual list but keep hidden off-screen
         for card in self.draw_pile:
             card.should_despawn = False
             card.visible = False
@@ -150,38 +153,30 @@ class DeckManager:
                 visual_card_list.append(card)
 
     def draw_card(self, visual_card_list):
-        if len(self.draw_pile) == 0 and len(self.discard_pile) > 0:
-            self._recycle_discards(visual_card_list)
-
+        """ Draws one card. Deck is finite per round; no recycling! """
+        # Try to draw
         if len(self.draw_pile) > 0:
             card = self.draw_pile.pop()
             card.visible = True
             card.should_despawn = False 
             return card
         return None
-
-    def _recycle_discards(self, visual_card_list):
-        self.draw_pile = self.discard_pile[:]
-        self.discard_pile = []
-        random.shuffle(self.draw_pile)
-        
-        for card in self.draw_pile:
-            card.should_despawn = False 
-            card.visible = False
-            card.center_x = config.SCREEN_WIDTH + 200
-            if card not in visual_card_list:
-                visual_card_list.append(card)
     
     def get_deck_counts(self):
+        """ Returns (current_cards_in_draw_pile, total_valid_cards) """
         total = len([c for c in self.master_deck if c.modifier != "destroy"])
-        current = len(self.draw_pile) + len(self.discard_pile)
+        # Now strictly reflects what is left to draw in the current round
+        current = len(self.draw_pile) 
         return current, total
 
 class ShopManager:
+    """ Handles generating shop items and Pack cards """
+    
     def generate_shop(self, shop_list, shop_buttons, current_jokers):
         shop_list.clear()
         shop_buttons.clear()
         
+        # 1. Determine Slots (Pack, Joker, Random)
         slots = ['Pack', 'Joker']
         slots.append(random.choice(['Pack', 'Joker']))
         
@@ -217,10 +212,12 @@ class ShopManager:
                 shop_buttons.append(btn)
 
     def get_pack_cards(self, master_deck):
+        """ Selects 8 random valid cards for the pack opening screen """
         available = [c for c in master_deck if c.modifier != "destroy"]
         num = min(8, len(available))
         return random.sample(available, num)
 
     def get_pack_modifiers(self):
+        """ Returns 2 random modifier keys """
         keys = list(config.MODIFIER_DATA.keys())
         return random.sample(keys, 2)

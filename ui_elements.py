@@ -95,7 +95,7 @@ def draw_shadows(sprite_list):
             sprite.center_y - 5,
             width,
             height,
-            -sprite.angle  # FIXED: Negated angle to sync shadow rotation
+            -sprite.angle
         )
 
         arcade.draw_polygon_filled(points, config.COLOR_SHADOW)
