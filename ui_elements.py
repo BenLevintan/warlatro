@@ -8,7 +8,7 @@ class TextButton:
         self.center_y = cy
         self.width = width
         self.height = height
-        self.text = "  " + text 
+        self.text = text
         self.base_color = color
         self.highlight_color = config.COLOR_BTN_HOVER
         self.text_color = text_color
@@ -33,7 +33,7 @@ class TextButton:
         arcade.draw_text(
             self.text, self.center_x, self.center_y, self.text_color,
             font_size=14, bold=True, anchor_x="center", anchor_y="center",
-            multiline=True, width=self.width
+            multiline=True, width=int(self.width), align="center"
         )
 
     def check_mouse_hover(self, x, y):
@@ -44,7 +44,6 @@ class TextButton:
 
     def is_clicked(self, x, y):
         return self.visible and self.active and self.is_hovered
-
 
 def get_rotated_points(cx, cy, w, h, angle_deg):
     """ Helper to calculate the 4 corners of a rotated rectangle """
@@ -74,7 +73,6 @@ def get_rotated_points(cx, cy, w, h, angle_deg):
         
     return rotated_points
 
-
 def draw_shadows(sprite_list):
     """ Draws a drop shadow for every sprite, accounting for rotation and scale """
     for sprite in sprite_list:
@@ -101,7 +99,6 @@ def draw_shadows(sprite_list):
         )
 
         arcade.draw_polygon_filled(points, config.COLOR_SHADOW)
-
 
 def draw_tooltip(hovered_joker, mouse_x, mouse_y):
     if not hovered_joker:
