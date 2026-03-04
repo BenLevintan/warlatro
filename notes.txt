@@ -3,3 +3,10 @@
 tried to make the following fixes - check if they work:
 [V] pear up now should work also with 3 and 4 of a kind - use to work just with pair and 2 pairs 
 [V] duonle trouble should now work with full house too
+
+[] make a .md file where you will have a roadmap and objectives that you will need to figure out, like:
+
+    * add jokers that add more coins 
+    * add a joker that is effected by the amount of coins you have
+    * figure a way to upload this game on itch
+    * make a stats file (highest level, largest hand played, favorite card, favorite joker etc..)
