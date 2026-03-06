@@ -10,3 +10,4 @@ tried to make the following fixes - check if they work:
     * add a joker that is effected by the amount of coins you have
     * figure a way to upload this game on itch
     * make a stats file (highest level, largest hand played, favorite card, favorite joker etc..)
+    * implement the 3 running audio tracks idea 
