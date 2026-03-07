@@ -51,7 +51,8 @@ def get_hand_type(hand_list):
     
     return "High Card"
 
-def calculate_hand_score(hand_list, joker_list, run_discards, cards_in_deck):
+# --- UPDATED: Added current_coins to arguments ---
+def calculate_hand_score(hand_list, joker_list, run_discards, cards_in_deck, current_coins):
     if not hand_list: 
         return 0, 1, [], 0
 
@@ -142,6 +143,20 @@ def calculate_hand_score(hand_list, joker_list, run_discards, cards_in_deck):
         if joker.key == "inflation" and len(hand_list) <= 4:
             additive_mult += 12
             breakdown.append("Inflation(+12)")
+            
+        # NEW: Petty Cash (+$3 Chips per $1)
+        if joker.key == "petty_cash":
+            if current_coins > 0:
+                bonus = current_coins * 3
+                bonus_points += bonus
+                breakdown.append(f"Petty(+{bonus})")
+                
+        # NEW: Capital Gains (x1 mult per $10)
+        if joker.key == "capital_gains":
+            mult_factor = current_coins // 10
+            if mult_factor > 1: # Values of 0 and 1 don't change the multiplier mathematically
+                final_multiplier *= mult_factor
+                breakdown.append(f"Gains(x{mult_factor})")
 
         # --- CARD PROPERTY TRIGGERS ---
         if joker.key == "diamond_geezer":

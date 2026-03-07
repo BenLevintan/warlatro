@@ -58,7 +58,7 @@ COLOR_PURPLE = (128, 0, 128)
 COLOR_SHADOW = (0, 0, 0, 100)
 COLOR_TOOLTIP_BG = (20, 20, 20, 230) 
 
-# --- Joker Definitions (STRICTLY MATCHING ASSETS) ---
+# --- Joker Definitions ---
 JOKER_DATA = {
     "club_sandwich": {
         "name": "Club Sandwich", "cost": 6, "desc": "+20 Chips for each Club played", 
@@ -127,6 +127,24 @@ JOKER_DATA = {
     "wishing_well": {
         "name": "Wishing Well", "cost": 5, "desc": "Gain $1 for each A, 2, or 3 played",
         "file": resource_path("assets/jokers/wishing_well.jpg")
+    },
+    
+    # --- BRAND NEW JOKERS ---
+    "severance_package": {
+        "name": "Severance Package", "cost": 5, "desc": "Gain $2 for each Face Card discarded",
+        "file": resource_path("assets/jokers/severance_package.jpg")
+    },
+    "the_harvest": {
+        "name": "The Harvest", "cost": 6, "desc": "Gain $5 at the end of the round",
+        "file": resource_path("assets/jokers/the_harvest.jpg")
+    },
+    "petty_cash": {
+        "name": "Petty Cash", "cost": 4, "desc": "+3 Chips for every $1 you have",
+        "file": resource_path("assets/jokers/petty_cash.jpg")
+    },
+    "capital_gains": {
+        "name": "Capital Gains", "cost": 7, "desc": "x1 Mult for every $10 you have",
+        "file": resource_path("assets/jokers/capital_gains.jpg")
     }
 }
 
@@ -145,8 +163,8 @@ MUSIC_STORE = resource_path("assets/music/store_1.mp3")
 MUSIC_GAME_OVER = resource_path("assets/music/game_over.mp3")
 SOUND_CARD = resource_path("assets/music/card.mp3")
 SOUND_PLAY_HAND = resource_path("assets/music/play_hand.mp3")
-SOUND_BUY_JOKER = resource_path("assets/music/buy_joker.mp3") # NEW
-SOUND_MOD = resource_path("assets/music/mod.mp3")             # NEW
+SOUND_BUY_JOKER = resource_path("assets/music/buy_joker.mp3") 
+SOUND_MOD = resource_path("assets/music/mod.mp3")             
 
 # --- Shaders ---
 VERTEX_SHADER = """

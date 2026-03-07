@@ -31,7 +31,7 @@ class WarGame(arcade.Window):
         self.joker_list = arcade.SpriteList()
         self.shop_list = arcade.SpriteList()
         self.pack_card_list = arcade.SpriteList()
-        self.animating_cards = arcade.SpriteList() # NEW: Keeps tracking cards after shop is closed
+        self.animating_cards = arcade.SpriteList() 
         self.drawn_card = None
         
         self.state = GameState.DRAWING
@@ -73,7 +73,7 @@ class WarGame(arcade.Window):
         self.score_total = 0
         self.round_level = 1
         self.target_score = config.BASE_TARGET_SCORE
-        self.coins = 5
+        self.coins = 99995  # Debug Coins!
         self.run_discards = 0
         
         self.joker_list.clear()
@@ -144,6 +144,7 @@ class WarGame(arcade.Window):
         reward = (hands_left * 2) + (self.discards_left * 1)
         self.coins += reward
         
+        # --- National Reserve Bonus ---
         bonus_discards = sum(1 for j in self.joker_list if j.key == "mulligan")
         start_discards = config.MAX_DISCARDS + bonus_discards
         
@@ -153,10 +154,18 @@ class WarGame(arcade.Window):
             if nr_count > 0:
                 nr_bonus = nr_count * 3
                 self.coins += nr_bonus
+                
+        # --- NEW: The Harvest Bonus ---
+        harvest_count = sum(1 for j in self.joker_list if j.key == "the_harvest")
+        harvest_bonus = harvest_count * 5
+        if harvest_bonus > 0:
+            self.coins += harvest_bonus
 
         self.message = f"Round Cleared!\nEarned ${reward}."
         if nr_bonus > 0:
-            self.message += f"\n(Reserve Bonus +${nr_bonus})"
+            self.message += f"\n(Reserve: +${nr_bonus})"
+        if harvest_bonus > 0:
+            self.message += f"\n(Harvest: +${harvest_bonus})"
 
         self.shop_manager.generate_shop(self.shop_list, self.shop_buttons, self.joker_list)
         
@@ -188,7 +197,7 @@ class WarGame(arcade.Window):
                     self.shop_buttons.pop(index)
                     self.update_shop_buttons()
                     
-                    self.audio_manager.play_buy_joker_fx() # NEW SOUND
+                    self.audio_manager.play_buy_joker_fx() 
                 else:
                     self.message = "Inventory Full!"
             
@@ -204,7 +213,7 @@ class WarGame(arcade.Window):
         self.pack_card_list.clear()
         self.btn_pack_mods = []
         
-        self.audio_manager.play_mod_fx() # NEW SOUND: When cards are pulled
+        self.audio_manager.play_mod_fx() 
         
         chosen_cards = self.shop_manager.get_pack_cards(self.deck_manager.master_deck)
         
@@ -243,25 +252,22 @@ class WarGame(arcade.Window):
             return
             
         mod_key = self.pack_modifiers_offered[mod_index]
-        self.audio_manager.play_mod_fx() # NEW SOUND: When applied
+        self.audio_manager.play_mod_fx() 
         
         for card in selected:
             card.modifier = mod_key
             card.is_selected = False
             
-            # --- NEW ANIMATION LOGIC ---
             if mod_key == "destroy":
                 card.is_spasming = True
             else:
-                # Tell it to fly up and off screen
                 card.target_y = config.SCREEN_HEIGHT + 400
                 card.should_despawn = True
             
-            # Move card out of the static UI list into our dynamic animation list
             self.animating_cards.append(card)
             
         self.state = GameState.SHOPPING
-        self.pack_card_list.clear() # Clears remaining unselected cards immediately
+        self.pack_card_list.clear() 
         self.message = "Applied!"
 
     def score_hand(self):
@@ -269,8 +275,9 @@ class WarGame(arcade.Window):
         
         cards_in_deck = len(self.deck_manager.draw_pile)
         
+        # --- UPDATED: Pass self.coins into calculate_hand_score ---
         base, multi, desc, coin_bonus = scoring.calculate_hand_score(
-            self.hand_list, self.joker_list, self.run_discards, cards_in_deck
+            self.hand_list, self.joker_list, self.run_discards, cards_in_deck, self.coins
         )
         final_score = base * multi
         self.score_total += final_score
@@ -309,6 +316,15 @@ class WarGame(arcade.Window):
         
         self.run_discards += len(to_remove)
 
+        # --- NEW: Severance Package Logic ---
+        sev_pack_count = sum(1 for j in self.joker_list if j.key == "severance_package")
+        if sev_pack_count > 0:
+            # Check for J(11), Q(12), K(13)
+            faces_discarded = sum(1 for c in to_remove if c.value in [11, 12, 13])
+            if faces_discarded > 0:
+                gained = faces_discarded * 2 * sev_pack_count
+                self.coins += gained
+
         for card in to_remove:
             self.hand_list.remove(card)
             self.deck_manager.discard_pile.append(card)
@@ -329,7 +345,7 @@ class WarGame(arcade.Window):
         self.card_list.update()
         self.joker_list.update()
         self.shop_list.update()
-        self.animating_cards.update() # NEW: Keeps updating modified cards
+        self.animating_cards.update() 
         if self.state == GameState.PACK_OPENING:
             self.pack_card_list.update()
         
@@ -426,7 +442,6 @@ class WarGame(arcade.Window):
 
         ui_elements.draw_tooltip(self.hovered_joker, self.mouse_x, self.mouse_y)
         
-        # --- NEW: Draw Animating Pack Cards ON TOP ---
         ui_elements.draw_shadows(self.animating_cards)
         self.animating_cards.draw()
         for card in self.animating_cards:
@@ -448,7 +463,6 @@ class WarGame(arcade.Window):
         self.screen_texture.use(0)
         self.quad_fs.render(self.program)
     
-        # --- Draw FPS on top (after shader) ---
         fps = arcade.get_fps()
         arcade.draw_text(
             f"FPS: {fps:.1f}",
@@ -483,8 +497,10 @@ class WarGame(arcade.Window):
 
         if len(self.hand_list) > 0:
             cards_in_deck = len(self.deck_manager.draw_pile)
+            
+            # --- UPDATED: Pass self.coins ---
             s, m, desc, coin_bonus = scoring.calculate_hand_score(
-                self.hand_list, self.joker_list, self.run_discards, cards_in_deck
+                self.hand_list, self.joker_list, self.run_discards, cards_in_deck, self.coins
             )
             total = s * m
             self.btn_score.text = f"PLAY HAND\n{s} x {m} = {total}"
@@ -620,12 +636,10 @@ class WarGame(arcade.Window):
         if self.state == GameState.SHOPPING:
             self.update_shop_buttons()
 
-
 def main():
     window = WarGame()
     window.setup()
     arcade.run()
-
 
 if __name__ == "__main__":
     main()
